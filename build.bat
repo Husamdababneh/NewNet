@@ -29,7 +29,7 @@ set source_files=.\src\main.cpp
 set object_files=.\main.obj
 
 
-set msvc_common_link_opts=User32.lib Kernel32.lib /ENTRY:main
+set msvc_common_link_opts=/SUBSYSTEM:WINDOWS User32.lib Kernel32.lib /ENTRY:main
 
 REM compile main
 cl /c  %INCLUDE_PATHS% %flags% .\src\main.cpp %outputs%
