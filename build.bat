@@ -15,7 +15,7 @@ set outputs=/Fp"%bin_int%\main.pch" /Fo%bin_int%\ /Fd"%bin_int%\vc142.pdb"
 REM COMPILER OPTIONS START
 set common_flags=-F1048576 -Zi -FC -GS- -Gs1048576 -nologo  -diagnostics:caret -std:c++17 -Wall
 rem -WX
-set debug_flags=-Od 
+set debug_flags=-Ox 
 set release_flags=-Ox 
 set flags=%common_flags% %debug_flags%
 REM COMPILER OPTIONS END
@@ -29,7 +29,7 @@ set source_files=.\src\main.cpp
 set object_files=.\main.obj
 
 
-set msvc_common_link_opts=/SUBSYSTEM:WINDOWS User32.lib Kernel32.lib /ENTRY:main
+set msvc_common_link_opts=/SUBSYSTEM:WINDOWS opengl32.lib Gdi32.lib User32.lib Kernel32.lib /ENTRY:main
 
 REM compile main
 cl /c  %INCLUDE_PATHS% %flags% .\src\main.cpp %outputs%

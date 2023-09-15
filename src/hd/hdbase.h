@@ -234,6 +234,15 @@ typedef size_t Size;
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
 
+// Casey Muratori way of differentiating between the meaning of static in different locations
+
+// Static Local variable
+#define local_presist static 
+// Global variable
+#define global_variable static 
+// translation-unit scope function
+#define internal static  
+
 #ifdef HD_STRING
 
 //~ Strings and String Views 
@@ -247,12 +256,12 @@ struct String {
 
 typedef   String StringView; // do i need this ?
 constexpr String operator ""_s(const char* string, U64 length);
-static inline    String cstr_to_string(char* string, U64 length);
-static inline    String cstr_to_string(char* string);
-static inline    B64    is_null_terminated(const String str);
-static inline    S8     compare_strings(const String left, const String right);
-static inline    B8     is_strings_equal(const String left, const String right);
-static inline    String sub_str(const String str, U64 offset);
+internal inline    String cstr_to_string(char* string, U64 length);
+internal inline    String cstr_to_string(char* string);
+internal inline    B64    is_null_terminated(const String str);
+internal inline    S8     compare_strings(const String left, const String right);
+internal inline    B8     is_strings_equal(const String left, const String right);
+internal inline    String sub_str(const String str, U64 offset);
 
 
 #endif // HD_STRING

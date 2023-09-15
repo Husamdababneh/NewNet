@@ -4,21 +4,93 @@
    $Revision: : @Incomplete
    $Creator: Husam Dababneh
    $Description: Entry point
-    ========================================================================*/
+   ========================================================================*/
+
+#include "win32_nocrt.cpp"
+
+
+#define _STRSAFE_H_INCLUDED_
+#define _INC_STDIO
 
 
 #define HD_BASE_IMPL
 #define HD_STRING
-#include "hd/hdbase.h"
-#include "hd/hd_str.cpp"
 
+#define WIN32_LEAN_AND_MEAN 
 #include "windows.h"
 #include "winuser.h"
 #pragma comment(lib,"Kernel32.lib")
 #pragma comment(lib,"User32.lib")
-	
+#pragma comment(lib,"Gdi32.lib")
 
 
+
+// @TODO(husamd): replace this with custom implementation
+#define STOP_WARNINGS
+#include "printf.c"
+
+#pragma warning (disable: 4710)
+
+#include "hd/hdbase.h"
+#include "hd/hd_str.cpp"
+
+#include <GL/GL.h>
+#include <GL/glu.h>
+#pragma comment (lib, "opengl32.lib")
+
+#include "strsafe.h"
+
+#include "main.h"
+
+
+#include "opengl.cpp"
+
+
+#pragma function(memset)
+void* memset(void* dest, int c, size_t count)
+{
+    char* bytes = (char*)dest;
+    while(count--)
+    {
+        *bytes++ = (char)c;
+    }
+
+    return dest;
+}
+
+#pragma function(memcpy)
+void* memcpy(void* dest, const void* src, size_t count)
+{
+    char* dest8 = (char*)dest;
+    const char* src8 = (const char*)src;
+    while(count--)
+    {
+        *dest8++ = *src8++;
+    }
+    return dest;
+}
+
+
+global_variable B8 running = true;
+
+
+struct Win32_OffscreenBuffer {
+    BITMAPINFO info;
+    char       padding[4];
+    void*      memory;
+    U64        width, height;
+    U64        stride, bytePerPixel;
+};
+
+
+struct WindowDimentions
+{
+    U64 width, height;
+};
+
+global_variable Win32_OffscreenBuffer offscreenBuffer;
+
+inline internal
 void print_string(const String str)
 {
     HANDLE console = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -26,11 +98,24 @@ void print_string(const String str)
     GetConsoleScreenBufferInfo(console, &old);
     SetConsoleTextAttribute(console, FOREGROUND_RED);
     int output_size;
-    WriteConsole(console, str.str_char, (DWORD)str.length, (LPDWORD)&output_size, NULL);
+    WriteConsole(console, str.str_char, (DWORD)str.length-1, (LPDWORD)&output_size, NULL);
     SetConsoleTextAttribute(console, old.wAttributes);
 }
 
 
+BOOL ctrl_handler(DWORD event)
+{
+    if (event == CTRL_CLOSE_EVENT || event == CTRL_C_EVENT || event == CTRL_BREAK_EVENT ) {
+        // @CleanUp(husamd): This will shutdown the proces gracfully fornow,
+        //                   in the future we need to detach ourself from the console only
+        //                   so we can re open it when we want (ex: command to open/close console window)
+        running = false;
+        return TRUE;
+    }
+    return FALSE;
+}
+
+inline internal
 B8 InializeWin32Console()
 {
     BOOL success = AllocConsole();
@@ -46,144 +131,298 @@ B8 InializeWin32Console()
                                 FILE_ATTRIBUTE_NORMAL,
                                 NULL);
     SetStdHandle(STD_OUTPUT_HANDLE, hConOut);
-
+    SetConsoleCtrlHandler((PHANDLER_ROUTINE)(ctrl_handler), TRUE);
     return true;
+}
+
+//- 
+
+struct Pixel{
+    U32 b,g,r,padding;
+};
+
+inline internal 
+WindowDimentions win32_get_window_dimentions(HWND window)
+{
+    WindowDimentions result = {};
+    RECT windowRect;
+    GetWindowRect(window,&windowRect);
+    
+    result.width  = (U64)windowRect.right  - (U64)windowRect.left;
+    result.height = (U64)windowRect.bottom - (U64)windowRect.top;
+
+    return result;
+}
+
+inline internal
+void update_offscreen_buffer(HWND window, Win32_OffscreenBuffer* buffer)
+{
+    WindowDimentions dimentions = win32_get_window_dimentions(window);
+    
+    if (buffer->memory)
+    {
+        // TODO(Husam): Check the return of this;
+        BOOL result = VirtualFree(buffer->memory, 0, MEM_RELEASE);
+        (result);
+    }
+    
+    buffer->width        = dimentions.width;
+    buffer->height       = dimentions.height;
+    buffer->bytePerPixel = 4;
+
+    buffer->info.bmiHeader = {};
+    buffer->info.bmiHeader.biSize        =  sizeof(buffer->info.bmiHeader);
+    buffer->info.bmiHeader.biWidth       =  (LONG)buffer->width;
+    buffer->info.bmiHeader.biHeight      = -(LONG)buffer->height;
+    buffer->info.bmiHeader.biPlanes      =  1;
+    buffer->info.bmiHeader.biBitCount    =  32;
+    buffer->info.bmiHeader.biCompression =  BI_RGB;
+
+
+    U64 bitMapMemorySize = buffer->width * buffer->height * buffer->bytePerPixel;
+
+    
+    buffer->memory = VirtualAlloc(0, bitMapMemorySize, MEM_COMMIT, PAGE_READWRITE);
+
+    if(!buffer->memory)
+    {
+        print_string("Could not allocate memory for some reason\n"_s);
+        ExitProcess(0);
+    }
+
+    U64 pitch = buffer->width * buffer->bytePerPixel;
+    U8* pointer = (U8*)buffer->memory;
+    
+    for(U32 y = 0; y < buffer->height; y++)
+    {
+        U32* pixel = (U32*) pointer;
+        for(U32 x = 0; x < buffer->width; x++)
+        {
+            pixel[x] = (U32)(y << 8 | x);
+                //0x00FFCCFF;//(U32)((y << 8) | x);
+        }
+        pointer += pitch;
+    }
 }
 
 
 
+inline 
+internal
+void render(HWND window, Win32_OffscreenBuffer* buffer)
+{
+    HDC windowContext = GetDC(window);
+    
+    int result =  StretchDIBits(windowContext,
+                                0,                   // x dest
+                                0,                   // y dest
+                                (int)buffer->width,  // width dest
+                                (int)buffer->height, // height dest
+                                0,                   // x src     
+                                0,                   // y src     
+                                (int)buffer->width,  // width src 
+                                (int)buffer->height, // height src
+                                buffer->memory, 
+                                &buffer->info,  
+                                DIB_RGB_COLORS,
+                                SRCCOPY);
+
+    
+    
+    (result);
+}
+
+
 
 LRESULT CALLBACK
-MainWindowCallback(HWND   window,
+MainWindowCallback(HWND   hWindow,
                    UINT   message,
                    WPARAM wParam,
                    LPARAM lParam)
 {
     (void)wParam;
     (void)lParam;
-    (void)window;
-    
-    LRESULT result = 0;
+    (void)hWindow;
 
+    // char buffer[255] = {0};
+    // int size = wsprintfA(buffer, "Message Code: %d\n", message);
+    // print_string(String{(U64)size, buffer});
+    
+
+    //bool handled = false;
+    LRESULT result = 0;
+    // TODO: Handle each case as documented in win32 documentation since for example,
+    //       WM_GETICON must return a handle to the icon
+    //       WM_CREATE  must return 0 to continue creaing the window, -1 will destroy the window... etc
     switch(message)
     {
-      case WM_SIZE:
+        /*case WM_CREATE:
       {
-          print_string("WM_SIZE\n"_s);
-      }break;
-      case WM_DESTROY:
-      {
-          print_string("WM_DESTROY\n"_s);
-      }
-      break;
+          
+      }break;*/
       case WM_CLOSE:
       {
           print_string("WM_CLOSE\n"_s);
-          ExitProcess(0);
-      }break;
-      case WM_ACTIVATEAPP:
+          //handled = true;
+          running = false;
+      } break;
+      case WM_PAINT:
       {
-          print_string("WM_ACTIVATEAPP\n"_s);
-      }break;
+          update_offscreen_buffer(hWindow, &offscreenBuffer);         
+          render(hWindow, &offscreenBuffer);
+          result = DefWindowProc(hWindow, message, wParam, lParam);
+          //(handled);
+          //handled = true;
+      } break;
       default:
       {
-          result = DefWindowProc(window, message, wParam, lParam);
+          result = DefWindowProc(hWindow, message, wParam, lParam);
       }break;
     }
+
+    //result = DefWindowProc(hWindow, message, wParam, lParam);
     return result;
 }
 
-/*
-  const char * CMSWindow::RegisterWindowClass
-  (DWORD style,  int brush, WNDPROC pfnWndProc, HICON hIcon, int iCursorResource)
-*/
-static const char* ClassName = "TestClass";
-const char* RegisterWindowClass(HMODULE instance)
+
+
+void title_fps_counter(
+    HWND window,
+    LARGE_INTEGER& start_counter,
+    LARGE_INTEGER& frequency)
 {
-	WNDCLASSEXA wc = {0};
-    wc.cbSize      = sizeof(wc);
-    wc.style       = CS_OWNDC | CS_HREDRAW | CS_VREDRAW /*Redraw if size changes*/;
-    wc.lpfnWndProc = MainWindowCallback;
-    wc.cbClsExtra  = 0;
-    wc.cbWndExtra  = 0;
-    wc.hInstance   = instance;
-    wc.hIcon       = NULL;
-    wc.hCursor     = NULL;
-    wc.hbrBackground = (HBRUSH)(COLOR_BACKGROUND + 1);
-    wc.lpszMenuName  = "MenuName";
-    wc.lpszClassName = ClassName;
+    LARGE_INTEGER end_counter, counts, fps, ms;
+    QueryPerformanceCounter(&end_counter);
+  
+    counts.QuadPart = end_counter.QuadPart - start_counter.QuadPart;
+    start_counter = end_counter;
+        
+    fps.QuadPart = frequency.QuadPart / counts.QuadPart;
+    ms.QuadPart = ((1000 * counts.QuadPart) / frequency.QuadPart);
+        
+    U8 buf[100] = {};    
+    DWORD_PTR pArgs[] = {
+        (DWORD_PTR)counts.QuadPart,
+        (DWORD_PTR)frequency.QuadPart,
+        (DWORD_PTR)fps.QuadPart,
+        (DWORD_PTR)ms.QuadPart        
+    };
 
+    char* formatString = "counts:%lld| frequency:%lld| fps:%lld| ms:%lld";
 
-    ATOM result = RegisterClassEx(&wc);
-	if (!result)
-    {
-        // LOG HERE
-        ExitProcess(1);
-    }
-	return ClassName;
+    snprintf((char*)buf, 100, formatString,
+             counts.QuadPart,   
+             frequency.QuadPart,
+             fps.QuadPart,      
+             ms.QuadPart);
+
+        
+     
+    SetWindowTextA(window, (LPCSTR)buf);
 }
-
-
 
 int  main()
 {
     HMODULE instance = GetModuleHandleA(0);
-    //LPSTR commandLineArguments = GetCommandLineA();
+    LPSTR commandLineArguments = GetCommandLineA();
     InializeWin32Console();
-    //HANDLE console = GetStdHandle(STD_OUTPUT_HANDLE);
+    HANDLE console = GetStdHandle(STD_OUTPUT_HANDLE);
+    // @CleanUp(husamd):
+    (commandLineArguments);
+    (console);
+    
 
-    String str = "This is a test string"_s;
-
-    U64 offset = MIN(4, str.length);
-    String sub = sub_str(str, offset);
-    print_string(sub);
-    //print_string(&str);
+    // Register Class
+    WNDCLASS wc      = {0};
+    wc.style         = CS_OWNDC | CS_HREDRAW | CS_VREDRAW /*Redraw if size changes*/;
+    wc.lpfnWndProc   = MainWindowCallback;
+    wc.hInstance     = instance;
+    wc.lpszClassName = "NewNetWindowClass";
 
     
-    DWORD tickCount = GetTickCount();
-    char out[1024] = {0};
-    out[0] = '\n';
-    S64 count =  wsprintfA(out+1, "%d", (int)tickCount);
-    if (count < 1)
-        ExitProcess(1);
-    String str2 = {(U64)count, out};
-    print_string(str2);
 
-    
-    // Create Windows Window
-
-    // Register Class 
-    const char* className = RegisterWindowClass(instance);
-
-
+    RegisterClassA(&wc);
     // Create the window 
     HWND window = CreateWindowExA(0,
-                                  className,
+                                  wc.lpszClassName,
                                   "Window Name",
-                                  WS_OVERLAPPEDWINDOW|WS_VISIBLE,
+                                  WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+                                  CW_USEDEFAULT,
+                                  CW_USEDEFAULT,
+                                  CW_USEDEFAULT,
+                                  CW_USEDEFAULT,
                                   0,
                                   0,
-                                  800,
-                                  600,
-                                  NULL,
-                                  NULL,
                                   instance,
-                                  NULL);
+                                  0);
 
-    B8 running = true;
+
+    if(!window)
+    {
+        // TODO(Husam):Log Here
+        ExitProcess(0);
+    }
+
+    // Choose a graphics backend
+
+    // NOTE(husamd): OpenGL For now 
+    // Create openGL context
+    
+    OpenGLBackend backEnd = createOpenGLBackend(window);
+   
+    
+    LARGE_INTEGER start_counter, frequency; //, end_counter, counts, fps, ms;
+    
+    QueryPerformanceCounter(&start_counter);
+    QueryPerformanceFrequency(&frequency);
+    HDC windowContext = GetDC(window);
     while(running)
     {
         MSG message;
-        BOOL messageResult = GetMessage(&message, 0, 0, 0);
-        if (messageResult > 0)
+        while(PeekMessageA(&message, window, 0, 0, PM_REMOVE))
         {
-            TranslateMessage(&message);
+            if (message.message == WM_QUIT) {
+                running = false;
+                break;
+            }
+            TranslateMessage(&message); 
             DispatchMessage(&message);
-            continue;
         }
+
+        title_fps_counter(window, start_counter, frequency);
+
+        //render(window, &offscreenBuffer);
+
         
-        running = false;
+
+        float vertices[] = {
+            -0.5f, -0.5f, 0.0f,
+            0.5f, -0.5f, 0.0f,
+            0.0f,  0.5f, 0.0f
+        };  
+        //unsigned int VBO;
+        //glGenBuffers(1, &VBO);  
+        glClearColor(0.2f, 0.8f, 0.5f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+
+
+        
+        SwapBuffers(windowContext );
     }
     
+
+    {
+        // NOTE(husamd): I wish defer is a thing in c/c++
+        // Unnecessary; wglDeleteContext will make the context not current
+        //wglMakeCurrent(backEnd.context, NULL);
+        wglDeleteContext(backEnd.context);
+        PostQuitMessage(0);
+    }
+    
+//  end:
+    // This is not important here beacuse the application is already closing...
+    DestroyWindow(window);
+    FreeConsole();
     ExitProcess(0);
 }
