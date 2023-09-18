@@ -15,7 +15,7 @@ set outputs=/Fp"%bin_int%\main.pch" /Fo%bin_int%\ /Fd"%bin_int%\vc142.pdb"
 REM COMPILER OPTIONS START
 set common_flags=-F1048576 -Zi -FC -GS- -Gs1048576 -nologo  -diagnostics:caret -std:c++17 -Wall
 rem -WX
-set debug_flags=-Ox 
+set debug_flags=-Od
 set release_flags=-Ox 
 set flags=%common_flags% %debug_flags%
 REM COMPILER OPTIONS END

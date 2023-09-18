@@ -34,9 +34,9 @@
 #include "hd/hdbase.h"
 #include "hd/hd_str.cpp"
 
-#include <GL/GL.h>
-#include <GL/glu.h>
-#pragma comment (lib, "opengl32.lib")
+//#include <GL/GL.h>
+//#include <GL/glu.h>
+//#pragma comment (lib, "opengl32.lib")
 
 #include "strsafe.h"
 
@@ -268,8 +268,8 @@ MainWindowCallback(HWND   hWindow,
       } break;
       case WM_PAINT:
       {
-          update_offscreen_buffer(hWindow, &offscreenBuffer);         
-          render(hWindow, &offscreenBuffer);
+          //update_offscreen_buffer(hWindow, &offscreenBuffer);         
+          //render(hWindow, &offscreenBuffer);
           result = DefWindowProc(hWindow, message, wParam, lParam);
           //(handled);
           //handled = true;
@@ -321,6 +321,90 @@ void title_fps_counter(
     SetWindowTextA(window, (LPCSTR)buf);
 }
 
+const char *vertexShaderSource = "#version 330 core\n"
+    "layout (location = 0) in vec3 aPos;\n"
+    "void main()\n"
+    "{\n"
+   "   gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
+    "}\0";
+const char *fragmentShaderSource = "#version 330 core\n"
+    "out vec4 FragColor;\n"
+    "void main()\n"
+    "{\n"
+    "   FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n"
+    "}\n\0";
+
+
+struct Item
+{
+    U32 vbo, ebo, vao;
+    U32 vertexShader, fragmentShader;
+    U32 shaderProgram;
+};
+
+//inline
+#pragma auto_inline(off)
+internal
+Item init_object()
+{
+    Item obj = {};
+    F32 vertices[] = {
+        0.5f,  0.5f, 0.0f,  // top right
+        0.5f, -0.5f, 0.0f,  // bottom right
+        -0.5f, -0.5f, 0.0f,  // bottom left
+        -0.5f,  0.5f, 0.0f   // top left 
+    };
+    
+    U32 indices[] = {  // note that we start from 0!
+        0, 1, 3,   // first triangle
+        1, 2, 3    // second triangle
+    };
+
+
+    // Generate Vertex Arrays 
+    glGenVertexArrays(1, &obj.vao);
+    // Generate Normal(memory space) Buffers
+    glGenBuffers(1, &obj.vbo);
+    glGenBuffers(1, &obj.ebo);
+
+    glBindVertexArray(obj.vao);
+    glBindBuffer(GL_ARRAY_BUFFER, obj.vbo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, obj.ebo);
+    
+    // Populate Generated buffers 
+    glNamedBufferData(obj.vbo, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    glNamedBufferData(obj.ebo, sizeof(indices), indices, GL_STATIC_DRAW);
+    
+    // We don't have glNamedVertexAttribPointer so we need to bind it before using it 
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexArrayAttrib(obj.vao, 0);
+
+
+    // Shaders
+
+    // vertex shader
+    obj.vertexShader = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(obj.vertexShader, 1, (const S8**)&vertexShaderSource, NULL);
+    glCompileShader(obj.vertexShader);
+
+
+    // fragment shader
+    obj.fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(obj.fragmentShader, 1, (const S8**)&fragmentShaderSource, NULL);
+    glCompileShader(obj.fragmentShader);
+    
+    obj.shaderProgram  = glCreateProgram();
+    glAttachShader(obj.shaderProgram, obj.vertexShader);
+    glAttachShader(obj.shaderProgram, obj.fragmentShader);
+    glLinkProgram(obj.shaderProgram);
+
+    //glDeleteShader(vertexShader);
+    //glDeleteShader(fragmentShader);
+    
+    return obj;
+}
+#pragma auto_inline(on)
+
 int  main()
 {
     HMODULE instance = GetModuleHandleA(0);
@@ -369,13 +453,17 @@ int  main()
     // Create openGL context
     
     OpenGLBackend backEnd = createOpenGLBackend(window);
-   
+    
+    
     
     LARGE_INTEGER start_counter, frequency; //, end_counter, counts, fps, ms;
     
     QueryPerformanceCounter(&start_counter);
     QueryPerformanceFrequency(&frequency);
     HDC windowContext = GetDC(window);
+
+    Item obj = init_object();
+    
     while(running)
     {
         MSG message;
@@ -392,21 +480,16 @@ int  main()
         title_fps_counter(window, start_counter, frequency);
 
         //render(window, &offscreenBuffer);
-
-        
-
-        float vertices[] = {
-            -0.5f, -0.5f, 0.0f,
-            0.5f, -0.5f, 0.0f,
-            0.0f,  0.5f, 0.0f
-        };  
-        //unsigned int VBO;
-        //glGenBuffers(1, &VBO);  
         glClearColor(0.2f, 0.8f, 0.5f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
 
-
+        // seeing as we only have a single VAO there's no need to bind it every time,
+        // but we'll do so to keep things a bit more organized
+        glBindVertexArray(obj.vao);
+        glUseProgram(obj.shaderProgram);
+        glDrawElements(0x4, 6, 0x1405, nullptr);
+        
         
         SwapBuffers(windowContext );
     }

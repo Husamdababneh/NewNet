@@ -15,10 +15,23 @@
     proc = reinterpret_cast<proc##Proc>(wglGetProcAddress(#proc));  \
     if (proc == nullptr)\
     {\
-        MessageBox(NULL, #proc, "Error Loading OpenGL function", MB_OK);\
-        return false;\
+        DWORD error_code = GetLastError();      \
+        char buffer[256] = {};                                          \
+        sprintf(buffer, #proc"->[%d]\n",error_code);                             \
+        MessageBox(NULL, buffer, "Error While Loading OpenGL Proc", MB_OK); \
+        return false;                                                   \
     }
 
+#define LOAD_OPENG_PROC_1_1(lib, proc)                            \
+    proc = reinterpret_cast<proc##Proc>(GetProcAddress(lib, #proc)); \
+    if (proc == nullptr)\
+    {\
+        DWORD error_code = GetLastError();      \
+        char buffer[256] = {};                                          \
+        sprintf(buffer, #proc"->[%d]\n",error_code);                             \
+        MessageBox(NULL, buffer, "Error While Loading OpenGL Proc", MB_OK); \
+        return false;                                                   \
+    }
 
 template<typename Signature>
 inline internal
@@ -33,14 +46,42 @@ Signature Load_OPENGL_PROC(const char* name)
 inline internal
 B8 LoadGLProcs()
 {
+
     LOAD_OPENG_PROC(glCreateProgram);
     LOAD_OPENG_PROC(glCreateShader);
-    LOAD_OPENG_PROC(glGenBuffers);
     LOAD_OPENG_PROC(glShaderSource);
     LOAD_OPENG_PROC(glCompileShader);
     LOAD_OPENG_PROC(glGetShaderiv);
     LOAD_OPENG_PROC(glAttachShader);
+    LOAD_OPENG_PROC(glUseProgram);
+    LOAD_OPENG_PROC(glLinkProgram);
 
+    LOAD_OPENG_PROC(glBindBuffer);
+    LOAD_OPENG_PROC(glGenBuffers);
+    LOAD_OPENG_PROC(glBufferData);
+    LOAD_OPENG_PROC(glNamedBufferData);
+
+
+    LOAD_OPENG_PROC(glBindVertexArray);
+    LOAD_OPENG_PROC(glGenVertexArrays);
+    LOAD_OPENG_PROC(glEnableVertexArrayAttrib);
+    LOAD_OPENG_PROC(glVertexAttribPointer);
+
+    HMODULE lib = LoadLibraryA("opengl32.dll");
+    if (lib == NULL)
+    {
+        DWORD error_code = GetLastError();                              
+        char buffer[256] = {};                                          
+        sprintf(buffer, "LoadGlProcs->[%d]\n",error_code);                    
+        MessageBox(NULL, buffer, "Error While Loading OpenGL Proc", MB_OK);
+        return false;
+
+    }
+    LOAD_OPENG_PROC_1_1(lib, glDrawElements);
+    LOAD_OPENG_PROC_1_1(lib, glClearColor);
+    LOAD_OPENG_PROC_1_1(lib, glClear);
+    LOAD_OPENG_PROC_1_1(lib, glGetString);
+    
     return true;
 }
 
@@ -68,21 +109,32 @@ OpenGLBackend createOpenGLBackend(HWND window)
             0, 0, 0
         };
 
-    HDC ourWindowHandleToDeviceContext = GetDC(window);
+    HDC deviceContext = GetDC(window);
 
-    int  letWindowsChooseThisPixelFormat;
-    letWindowsChooseThisPixelFormat = ChoosePixelFormat(ourWindowHandleToDeviceContext, &pfd); 
-    SetPixelFormat(ourWindowHandleToDeviceContext,letWindowsChooseThisPixelFormat, &pfd);
+    int  letWindowsChooseThisPixelFormat = ChoosePixelFormat(deviceContext, &pfd);
+    SetPixelFormat(deviceContext, letWindowsChooseThisPixelFormat, &pfd);
 
-    backend.context = wglCreateContext(ourWindowHandleToDeviceContext);
-    wglMakeCurrent(ourWindowHandleToDeviceContext, backend.context);
+    backend.context = wglCreateContext(deviceContext);
+    wglMakeCurrent(deviceContext, backend.context);
 
+    auto wglCreateContextAttribsARB = (wglCreateContextAttribsARBProc)
+        wglGetProcAddress("wglCreateContextAttribsARB");
 
+    int const create_attribs[] = {
+        WGL_CONTEXT_MAJOR_VERSION_ARB, 4,
+        WGL_CONTEXT_MINOR_VERSION_ARB, 6,
+        0
+    };
+    
+    HGLRC newContext = wglCreateContextAttribsARB(deviceContext, backend.context, create_attribs);
+
+    wglMakeCurrent(deviceContext, newContext);
     if (!LoadGLProcs())
     {
         ExitProcess(0);
     }
 
+    MessageBoxA(0, glGetString(GL_VERSION), "OPENGL VERSION",0);
     // glCreateProgramProc glCreateProgram = TEST(glCreateProgram, glCreateProgramProc);
     // if (glCreateProgram == nullptr)
     // {
