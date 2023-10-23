@@ -26,6 +26,21 @@ extern "C" {
 #define GL_UNSIGNED_INT         0x1405
 #define GL_VERSION              0x1f02
 
+#define GL_TEXTURE_2D           0xde1
+#define GL_TEXTURE_MAG_FILTER   0x2800
+#define GL_TEXTURE_MIN_FILTER   0x2801
+#define GL_TEXTURE_WRAP_S   	0x2802
+#define GL_TEXTURE_WRAP_T   	0x2803
+
+#define GL_REPEAT            	0x2901
+#define GL_LINEAR               0x2601
+
+#define GL_UNSIGNED_BYTE        0x1401
+
+#define GL_TEXTURE0             0x84c0
+
+#define GL_RGB                   0x1907
+#define GL_RGBA                  0x1908
 
 #define WGL_CONTEXT_MAJOR_VERSION_ARB           0x2091
 #define WGL_CONTEXT_MINOR_VERSION_ARB           0x2092
@@ -56,21 +71,32 @@ PROC_DECLARATION(void, glGetShaderiv, U32, U32, S32);
 PROC_DECLARATION(void, glAttachShader, U32 program, U32 shader);
 PROC_DECLARATION(void, glLinkProgram, U32 program);
 PROC_DECLARATION(void, glUseProgram, U32 program);
+PROC_DECLARATION(void, glDeleteShader, U32 shaderId);
 
 // Buffers
-PROC_DECLARATION(void, glBindBuffer, U32, U32);
-PROC_DECLARATION(void, glGenBuffers, U32, U32*);
-PROC_DECLARATION(void, glBufferData, U32, U32, U32*, U32);
-PROC_DECLARATION(void, glNamedBufferData, U32, U32, const void*, U32);
+PROC_DECLARATION(void,  glBindBuffer, U32, U32);
+PROC_DECLARATION(void,  glGenBuffers, U32, U32*);
+PROC_DECLARATION(void,  glBufferData, U32, U32, U32*, U32);
+PROC_DECLARATION(void,  glNamedBufferData, U32, U32, const void*, U32);
 
-PROC_DECLARATION(void, glBindVertexArray, U32);
-PROC_DECLARATION(void, glGenVertexArrays, U32, U32*);
-PROC_DECLARATION(void, glEnableVertexArrayAttrib, U32, U32);
-PROC_DECLARATION(void, glVertexAttribPointer, U32, S32, U32, U8, U32, const void *);
-PROC_DECLARATION(void, glDrawElements, U32, U32, U32, const void*);
-PROC_DECLARATION(void, glClearColor, F32,F32,F32,F32);
-PROC_DECLARATION(void, glClear, U32);
-PROC_DECLARATION(char*,glGetString, U32);
+PROC_DECLARATION(void,  glBindVertexArray, U32);
+PROC_DECLARATION(void,  glGenVertexArrays, U32, U32*);
+PROC_DECLARATION(void,  glEnableVertexArrayAttrib, U32, U32);
+PROC_DECLARATION(void,  glVertexAttribPointer, U32, S32, U32, U8, U32, const void *);
+PROC_DECLARATION(void,  glDrawElements, U32, U32, U32, const void*);
+PROC_DECLARATION(void,  glClearColor, F32,F32,F32,F32);
+PROC_DECLARATION(void,  glClear, U32);
+PROC_DECLARATION(char*, glGetString, U32);
+
+PROC_DECLARATION(void,  glGenTextures, U32, U32*);
+PROC_DECLARATION(void,  glBindTexture, U32, U32);
+PROC_DECLARATION(void,  glTexParameteri, U32, U32, U32);
+PROC_DECLARATION(void,  glTexImage2D, U32, S32, S32, U32, U32, S32, U32, U32, void*);
+PROC_DECLARATION(void,  glGenerateMipmap, U32);
+PROC_DECLARATION(void,  glActiveTexture, U32);
+PROC_DECLARATION(S32 ,  glGetUniformLocation, U32, const char*);
+PROC_DECLARATION(void,  glUniform1i, S32, S32);
+PROC_DECLARATION(void,  glUniform1f, S32, F32);
 
 
 typedef HGLRC (*wglCreateContextAttribsARBProc)(HDC hDC, HGLRC hshareContext, const int *attribList);

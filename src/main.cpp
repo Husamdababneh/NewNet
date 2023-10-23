@@ -13,8 +13,6 @@
 #define _INC_STDIO
 
 
-#define HD_BASE_IMPL
-#define HD_STRING
 
 #define WIN32_LEAN_AND_MEAN 
 #include "windows.h"
@@ -31,44 +29,21 @@
 
 #pragma warning (disable: 4710)
 
-#include "hd/hdbase.h"
-#include "hd/hd_str.cpp"
+#define HD_BASE_IMPL
+#define HD_STRING
+#define HD_MEMORY
+#define HD_IO
+#include "hd/inc.inc"
+
 
 //#include <GL/GL.h>
 //#include <GL/glu.h>
 //#pragma comment (lib, "opengl32.lib")
 
 #include "strsafe.h"
-
 #include "main.h"
-
-
 #include "opengl.cpp"
 
-
-#pragma function(memset)
-void* memset(void* dest, int c, size_t count)
-{
-    char* bytes = (char*)dest;
-    while(count--)
-    {
-        *bytes++ = (char)c;
-    }
-
-    return dest;
-}
-
-#pragma function(memcpy)
-void* memcpy(void* dest, const void* src, size_t count)
-{
-    char* dest8 = (char*)dest;
-    const char* src8 = (const char*)src;
-    while(count--)
-    {
-        *dest8++ = *src8++;
-    }
-    return dest;
-}
 
 
 global_variable B8 running = true;
@@ -89,19 +64,6 @@ struct WindowDimentions
 };
 
 global_variable Win32_OffscreenBuffer offscreenBuffer;
-
-inline internal
-void print_string(const String str)
-{
-    HANDLE console = GetStdHandle(STD_OUTPUT_HANDLE);
-    CONSOLE_SCREEN_BUFFER_INFO old;
-    GetConsoleScreenBufferInfo(console, &old);
-    SetConsoleTextAttribute(console, FOREGROUND_RED);
-    int output_size;
-    WriteConsole(console, str.str_char, (DWORD)str.length-1, (LPDWORD)&output_size, NULL);
-    SetConsoleTextAttribute(console, old.wAttributes);
-}
-
 
 BOOL ctrl_handler(DWORD event)
 {
@@ -125,7 +87,8 @@ B8 InializeWin32Console()
     }
 
     HANDLE hConOut = CreateFile("CONOUT$",
-                                GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                GENERIC_READ | GENERIC_WRITE,
+                                FILE_SHARE_READ | FILE_SHARE_WRITE,
                                 NULL,
                                 OPEN_EXISTING,
                                 FILE_ATTRIBUTE_NORMAL,
@@ -321,24 +284,39 @@ void title_fps_counter(
     SetWindowTextA(window, (LPCSTR)buf);
 }
 
-const char *vertexShaderSource = "#version 330 core\n"
-    "layout (location = 0) in vec3 aPos;\n"
-    "void main()\n"
-    "{\n"
-   "   gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
-    "}\0";
-const char *fragmentShaderSource = "#version 330 core\n"
-    "out vec4 FragColor;\n"
-    "void main()\n"
-    "{\n"
-    "   FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n"
-    "}\n\0";
+const char *vertexShaderSource = R"str(
+    #version 330 core
+    layout (location = 0) in vec3 aPos;
+    layout (location = 1) in vec2 aTexCoord;
+
+    uniform float scaleFactor;
+    out vec2 TexCoord;
+
+    void main()
+    {
+       TexCoord = vec2(aTexCoord.x, aTexCoord.y);
+       gl_Position = vec4(aPos.x * scaleFactor, aPos.y * scaleFactor, aPos.z, 1.0);
+    }
+)str";
+
+const char *fragmentShaderSource = R"str(
+    #version 330 core
+
+    in  vec2 TexCoord;
+    out vec4 FragColor;
+
+    uniform sampler2D texture1;
+
+    void main()
+    {
+       FragColor = texture(texture1, TexCoord);//vec4(1.0f, 0.5f, 0.2f, 1.0f);
+    }
+)str";
 
 
 struct Item
 {
     U32 vbo, ebo, vao;
-    U32 vertexShader, fragmentShader;
     U32 shaderProgram;
 };
 
@@ -348,11 +326,19 @@ internal
 Item init_object()
 {
     Item obj = {};
+    /*
     F32 vertices[] = {
-        0.5f,  0.5f, 0.0f,  // top right
-        0.5f, -0.5f, 0.0f,  // bottom right
-        -0.5f, -0.5f, 0.0f,  // bottom left
-        -0.5f,  0.5f, 0.0f   // top left 
+         0.5f,  0.5f, 0.0f, 1.0f, 1.0f, // top right
+         0.5f, -0.5f, 0.0f, 1.0f, 0.0f,  // bottom right
+        -0.5f, -0.5f, 0.0f, 1.0f, 0.0f,  // bottom left
+        -0.5f,  0.5f, 0.0f, 1.0f, 0.0f   // top left 
+    };
+    */
+    F32 vertices[] = {
+          1.0f,  1.0f, 0.0f, 1.0f, 1.0f, // top right
+          1.0f, -1.0f, 0.0f, 1.0f, 0.0f,  // bottom right
+         -1.0f, -1.0f, 0.0f, 1.0f, 0.0f,  // bottom left
+         -1.0f,  1.0f, 0.0f, 1.0f, 0.0f   // top left 
     };
     
     U32 indices[] = {  // note that we start from 0!
@@ -376,34 +362,45 @@ Item init_object()
     glNamedBufferData(obj.ebo, sizeof(indices), indices, GL_STATIC_DRAW);
     
     // We don't have glNamedVertexAttribPointer so we need to bind it before using it 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
     glEnableVertexArrayAttrib(obj.vao, 0);
+    glEnableVertexArrayAttrib(obj.vao, 1);
 
 
     // Shaders
 
     // vertex shader
-    obj.vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(obj.vertexShader, 1, (const S8**)&vertexShaderSource, NULL);
-    glCompileShader(obj.vertexShader);
+    auto vertexShader = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vertexShader, 1, (const S8**)&vertexShaderSource, NULL);
+    glCompileShader(vertexShader);
 
 
     // fragment shader
-    obj.fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(obj.fragmentShader, 1, (const S8**)&fragmentShaderSource, NULL);
-    glCompileShader(obj.fragmentShader);
+    auto fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fragmentShader, 1, (const S8**)&fragmentShaderSource, NULL);
+    glCompileShader(fragmentShader);
     
     obj.shaderProgram  = glCreateProgram();
-    glAttachShader(obj.shaderProgram, obj.vertexShader);
-    glAttachShader(obj.shaderProgram, obj.fragmentShader);
+    glAttachShader(obj.shaderProgram, vertexShader);
+    glAttachShader(obj.shaderProgram, fragmentShader);
     glLinkProgram(obj.shaderProgram);
 
-    //glDeleteShader(vertexShader);
-    //glDeleteShader(fragmentShader);
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);
     
     return obj;
 }
 #pragma auto_inline(on)
+
+
+U32 compute_requested_memory_size(PNG_FILE* image)
+{
+    // TODO: 
+    constexpr auto channels = 4;
+    return (image->width * image->height * (image->bit_depth) * channels);
+}
+
 
 int  main()
 {
@@ -414,7 +411,7 @@ int  main()
     // @CleanUp(husamd):
     (commandLineArguments);
     (console);
-    
+
 
     // Register Class
     WNDCLASS wc      = {0};
@@ -422,9 +419,8 @@ int  main()
     wc.lpfnWndProc   = MainWindowCallback;
     wc.hInstance     = instance;
     wc.lpszClassName = "NewNetWindowClass";
-
+    wc.hCursor       = LoadCursor(NULL, IDC_ARROW); // override WM_SETCURSOR to change the shape of the cursor  
     
-
     RegisterClassA(&wc);
     // Create the window 
     HWND window = CreateWindowExA(0,
@@ -440,7 +436,6 @@ int  main()
                                   instance,
                                   0);
 
-
     if(!window)
     {
         // TODO(Husam):Log Here
@@ -453,8 +448,11 @@ int  main()
     // Create openGL context
     
     OpenGLBackend backEnd = createOpenGLBackend(window);
-    
-    
+
+    // TODO: Treat this as a scratch buffer 
+    LinearAllocator allocator;
+    Initalize_LinearAllocate(&allocator, KB(4));
+
     
     LARGE_INTEGER start_counter, frequency; //, end_counter, counts, fps, ms;
     
@@ -463,7 +461,71 @@ int  main()
     HDC windowContext = GetDC(window);
 
     Item obj = init_object();
+    U32 texture1;
+    S32 uniformLocation;
+    S32 scaleFactorUniform;
+    {
+        glGenTextures(1, &texture1);
+        glBindTexture(GL_TEXTURE_2D, texture1);
+
+        // set the texture wrapping parameters
+        // set texture wrapping to GL_REPEAT (default wrapping method)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+            // set texture filtering parameters
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        File file = open_file("../assets/Rock035.png"_s8);
+        void* memory = VirtualAlloc(0, (SIZE_T)file.size, MEM_COMMIT, PAGE_READWRITE);
+        StreamingBuffer entire_file = read_entire_file(file, memory);
+        PNG_FILE image_info = parse_png_file(entire_file, &allocator);
+
+        void* image_data = VirtualAlloc(0,
+                                  (SIZE_T)compute_requested_memory_size(&image_info),
+                                  MEM_COMMIT,
+                                  PAGE_READWRITE);
+             
+        {
+            U64 pitch = image_info.width * 4;
+            U8* pointer = (U8*)image_data;
+            
+            for(U32 y = 0; y < image_info.height; y++)
+            {
+                U32* pixel = (U32*) pointer;
+                for(U32 x = 0; x < image_info.width; x++)
+                {
+                    pixel[x] = (U32)(y << 8 | x);
+                    //pixel[x] = 0xFFFFFF;
+                    //0x00FFCCFF;//(U32)((y << 8) | x);
+                }
+                pointer += pitch;
+            }
+        }
+               
+        glTexImage2D(GL_TEXTURE_2D,
+                     0,
+                     GL_RGB,
+                     image_info.width,
+                     image_info.height,
+                     0,
+                     GL_RGBA,
+                     GL_UNSIGNED_BYTE,
+                     image_data);
+        
+        glGenerateMipmap(GL_TEXTURE_2D);
+
+
+        glUseProgram(obj.shaderProgram);
+        
+        uniformLocation = glGetUniformLocation(obj.shaderProgram, "texture1");
+        glUniform1i(uniformLocation, 0);
+
+        scaleFactorUniform = glGetUniformLocation(obj.shaderProgram, "scaleFactor");
+        glUniform1f(scaleFactorUniform, 1.5);
+    }
     
+
     while(running)
     {
         MSG message;
@@ -483,11 +545,15 @@ int  main()
         glClearColor(0.2f, 0.8f, 0.5f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
+        
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, texture1);
 
         // seeing as we only have a single VAO there's no need to bind it every time,
         // but we'll do so to keep things a bit more organized
         glBindVertexArray(obj.vao);
         glUseProgram(obj.shaderProgram);
+        //glUniform1f(uniformLocation, 0.5);
         glDrawElements(0x4, 6, 0x1405, nullptr);
         
         
@@ -495,17 +561,19 @@ int  main()
     }
     
 
+    // NOTE(husamd): I wish defer is a thing in c/c++
     {
-        // NOTE(husamd): I wish defer is a thing in c/c++
+        
         // Unnecessary; wglDeleteContext will make the context not current
         //wglMakeCurrent(backEnd.context, NULL);
+
         wglDeleteContext(backEnd.context);
         PostQuitMessage(0);
     }
-    
-//  end:
-    // This is not important here beacuse the application is already closing...
+    Free_LinearAllocate(&allocator);           
     DestroyWindow(window);
     FreeConsole();
     ExitProcess(0);
 }
+
+

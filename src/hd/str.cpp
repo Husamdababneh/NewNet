@@ -6,7 +6,7 @@
    $Description: 
     ========================================================================*/
 
-#include "hdbase.h"
+#include "base.h"
 
 
 
@@ -18,6 +18,14 @@ String operator ""_s(const char* string, U64 length)
 	//               character which c/c++ adds to all the string literals
 	return String{length + 1, (char*)string}; 
 }
+
+constexpr //static inline
+const S8* operator ""_s8(const char* string, U64 length)
+{
+    (length);
+	return (S8*)string; 
+}
+
 
 static inline
 String cstr_to_string(char* string, U64 length)
@@ -35,12 +43,12 @@ String cstr_to_string(char* string)
 	return cstr_to_string(string, len); 
 }
 
+static inline
 B64 is_null_terminated(const String str)
 {
 	if (str.length <= 1) return true;
 	return 0 == str.str[str.length - 1];
 };
-
 
 
 static inline

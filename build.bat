@@ -9,30 +9,35 @@ set bin_int=.\bin-int\debug
 
 IF NOT EXIST %bin_int% mkdir %bin_int%
 
-set outputs=/Fp"%bin_int%\main.pch" /Fo%bin_int%\ /Fd"%bin_int%\vc142.pdb"
+set outputs=/Fp"%bin_int%\first.pch" /Fo%bin_int%\ /Fd"%bin_int%\vc142.pdb"
 
 
 REM COMPILER OPTIONS START
-set common_flags=-F1048576 -Zi -FC -GS- -Gs1048576 -nologo  -diagnostics:caret -std:c++17 -Wall
+set common_flags=-F1048576 -Zi -FC -Gz -GS- -Gs1048576 -nologo  -diagnostics:caret -std:c++17 -Wall
 rem -WX
-set debug_flags=-Od
+set debug_flags=-Od -EHa
 set release_flags=-Ox 
 set flags=%common_flags% %debug_flags%
 REM COMPILER OPTIONS END
 
-set debug_link_option=/DEBUG:FULL /NOLOGO /INCREMENTAL:NO /NODEFAULTLIB /STACK:0X100000,0X100000
+set debug_link_option=/DEBUG:FULL /NOLOGO /INCREMENTAL:NO /NODEFAULTLIB /STACK:0X100000,0X100000 /PDB:"first.pdb" 
 
 IF /I "%1"=="release" ( set flags=%common_flags% %release_flags% ) 
 
 set INCLUDE_PATHS=/I./src/
-set source_files=.\src\main.cpp
-set object_files=.\main.obj
+set source_files=.\src\first.cpp
+set object_files=.\first.obj
 
 
-set msvc_common_link_opts=/SUBSYSTEM:WINDOWS opengl32.lib Gdi32.lib User32.lib Kernel32.lib /ENTRY:main
+rem set entryProc=main
+set entryProc=test
+
+set LIBS=opengl32.lib Gdi32.lib User32.lib Kernel32.lib
+
+set msvc_common_link_opts=/SUBSYSTEM:CONSOLE %LIBS% /ENTRY:%entryProc%
 
 REM compile main
-cl /c  %INCLUDE_PATHS% %flags% .\src\main.cpp %outputs%
+cl /c  %INCLUDE_PATHS% %flags% %source_files% %outputs%
 IF ERRORLEVEL 1 GOTO errorHandling
 
 REM LINK 

@@ -55,7 +55,10 @@ B8 LoadGLProcs()
     LOAD_OPENG_PROC(glAttachShader);
     LOAD_OPENG_PROC(glUseProgram);
     LOAD_OPENG_PROC(glLinkProgram);
+    LOAD_OPENG_PROC(glDeleteShader);
 
+
+    
     LOAD_OPENG_PROC(glBindBuffer);
     LOAD_OPENG_PROC(glGenBuffers);
     LOAD_OPENG_PROC(glBufferData);
@@ -66,6 +69,19 @@ B8 LoadGLProcs()
     LOAD_OPENG_PROC(glGenVertexArrays);
     LOAD_OPENG_PROC(glEnableVertexArrayAttrib);
     LOAD_OPENG_PROC(glVertexAttribPointer);
+
+
+    LOAD_OPENG_PROC(glGenTextures);
+    LOAD_OPENG_PROC(glBindTexture);
+
+    
+    LOAD_OPENG_PROC(glGenerateMipmap);
+    LOAD_OPENG_PROC(glActiveTexture);
+
+
+    LOAD_OPENG_PROC(glGetUniformLocation);
+    LOAD_OPENG_PROC(glUniform1i);
+    LOAD_OPENG_PROC(glUniform1f);
 
     HMODULE lib = LoadLibraryA("opengl32.dll");
     if (lib == NULL)
@@ -81,7 +97,11 @@ B8 LoadGLProcs()
     LOAD_OPENG_PROC_1_1(lib, glClearColor);
     LOAD_OPENG_PROC_1_1(lib, glClear);
     LOAD_OPENG_PROC_1_1(lib, glGetString);
+
+
     
+    LOAD_OPENG_PROC_1_1(lib, glTexParameteri);
+    LOAD_OPENG_PROC_1_1(lib, glTexImage2D);
     return true;
 }
 
