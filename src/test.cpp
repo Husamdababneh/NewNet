@@ -20,6 +20,8 @@
 
 int test()
 {
+    Initalize_LinearAllocate(&global_allocator, MB(100));
+    
     LinearAllocator allocator;
     Initalize_LinearAllocate(&allocator, KB(4));
     
@@ -29,6 +31,13 @@ int test()
     File file = open_file("../assets/tests/8x8_uncompressed-no-interlace.png"_s8);
     //File file = open_file("../assets/tests/8x8_uncompressed-no-interlace"_s8);
 
+    // This needs to be fixed
+    if (file.handle == NULL)
+    {
+        print_string("File not found\n"_s);
+        ExitProcess(1);
+    }
+    
     // Allocate Enough memory to house the file itself
     void* memory = VirtualAlloc(0, (SIZE_T)file.size, MEM_COMMIT, PAGE_READWRITE);
 
@@ -49,8 +58,8 @@ int test()
     //load_png_image(&image_info, image_data);
     
     // Deallocate/free the file memory (give it back to the allocator)
-
-    Free_LinearAllocate(&allocator);       
+    Free_LinearAllocate(&allocator);
+    Free_LinearAllocate(&global_allocator);
     ExitProcess(1);
 }
 int png2()

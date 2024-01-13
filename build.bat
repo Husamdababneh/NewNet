@@ -13,7 +13,11 @@ set outputs=/Fp"%bin_int%\first.pch" /Fo%bin_int%\ /Fd"%bin_int%\vc142.pdb"
 
 
 REM COMPILER OPTIONS START
+rem -Gs1048576
+rem It would be nice if i can implement __chkstk, but it seems that I cannot
+rem in anycase, -Gs1048576 should equal the stack range, so unless we use 10mb of stack memory the __chkstk procedure should not be called anyways -husamd
 set common_flags=-F1048576 -Zi -FC -Gz -GS- -Gs1048576 -nologo  -diagnostics:caret -std:c++17 -Wall
+rem use the below flag when you want the warnings to be treated as errors
 rem -WX
 set debug_flags=-Od -EHa
 set release_flags=-Ox 

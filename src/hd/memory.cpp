@@ -48,9 +48,6 @@ S32 memcmp(const void *str1, const void *str2, size_t n)
 }
 
 
-
-
-
 void* AllocateSize(LinearAllocator* allocator, Size size)
 {
     U64 availableSize = allocator->size - U64 ((U8*)allocator->current - (U8*)allocator->start);

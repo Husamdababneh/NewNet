@@ -50,6 +50,9 @@ parse_ihdr_data(PNG_IHDR_Chunk* ihdr, PNG_FILE* png_file);
 
 
 
+Buffer deflate(StreamingBuffer sb);
+
+
 /*
  * This Procedure shall not allocate memory, hence we require buffer containing the data for now
  * 
@@ -139,11 +142,14 @@ PNG_FILE parse_png_file(StreamingBuffer entire_file, LinearAllocator* allocator)
               
               U64 textLen = chunkHeader->length -
                   (keyword.length + language_tag.length + translated_keyword.length + 2);
+              
               StreamingBuffer sb;
               sb.content = (U8*)ConsumeSize(&cursor, textLen);//ConsumeString(&cursor, textLen);
               sb.size    = textLen;
 
-              print_text(keyword, "Yet To be decoded"_s);
+              //Buffer decoded = deflate(sb);
+              //String str = {decoded.size, (char*)decoded.content};
+              print_text(keyword, "Some data"_s);
           }break;
           case 'iCCP':
           case 'zTXt':
@@ -151,11 +157,12 @@ PNG_FILE parse_png_file(StreamingBuffer entire_file, LinearAllocator* allocator)
               String keyword = ConsumeCString(&cursor);
               U8 compression_method = *(U8*)ConsumeSize(&cursor, 1);
               U64 textLen = chunkHeader->length - (keyword.length + 1);
+              print_text(keyword, "Decode me"_s);
 
-              StreamingBuffer sb;
+              StreamingBuffer sb = {};
               sb.content = (U8*)ConsumeSize(&cursor, textLen);//ConsumeString(&cursor, textLen);
               sb.size    = textLen;
-              print_text(keyword, "Decode me"_s);
+              Buffer data = deflate(sb);
           }break;
           case 'IEND':
           {
@@ -163,6 +170,7 @@ PNG_FILE parse_png_file(StreamingBuffer entire_file, LinearAllocator* allocator)
           }break;
           default:
           {
+              print_string("    Chunk type not supported yet\n"_s);
               ConsumeSize(&cursor, chunkHeader->length);
           }break;
         };
@@ -186,7 +194,6 @@ void load_png_image(PNG_FILE* image_info, void* image_data)
     
     // This is only needed for one time, hmmmm
     PNG_IDAT_Chunk_Header* header = ConsumeType(cursor, PNG_IDAT_Chunk_Header);
-    (header);
     
     if (header->_cm.CM != 8 || header->_flags.FDICT != 0)
     {
@@ -418,90 +425,315 @@ _print_text(String keyword, String text)
 }
 
 
-/*
-#include <stdio.h>
-#include <stdlib.h>
+extern LinearAllocator global_allocator;
 
-// Define a structure for a node in the adaptive Huffman tree
-typedef struct Node {
-    int value;        // Symbol value (or special value for internal nodes)
-    struct Node* parent;
-    struct Node* left;
-    struct Node* right;
-} Node;
+struct HuffmanTableEntry
+{
+    U16 symbol;
+    U16 bitsUsed;    
+};
 
-// Function to create a new node
-Node* createNode(int value) {
-    Node* newNode = (Node*)malloc(sizeof(Node));
-    newNode->value = value;
-    newNode->parent = newNode->left = newNode->right = NULL;
-    return newNode;
+struct HuffmanTable
+{
+    HuffmanTableEntry* entries;
+    U32 entriesCount;
+    U32 maxBitLen;
+};
+
+
+#define ArrayCount(x) (sizeof(x)/sizeof(x[0]))
+
+constexpr U8 HuffmanCompressedBlockLengthsMap[] =
+{
+    0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0
+};
+
+constexpr U8 HuffmanCompressedBlockDistancesMap[] =
+{
+    0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13
+};
+
+
+internal
+HuffmanTable AllocateHuffman(U32 bitsCount)
+{
+    Assert((bitsCount <= 16) &&  "Implement Me ");
+    HuffmanTable table;
+    table.maxBitLen = bitsCount;
+    table.entriesCount = ((U64)1 << bitsCount);
+    table.entries = (HuffmanTableEntry*)AllocateSize(&global_allocator,
+                                                     table.entriesCount * sizeof(HuffmanTableEntry));
+    return table;
 }
 
-// Function to rebuild the adaptive Huffman tree from encoded data
-Node* rebuildTree(unsigned char* encodedData, size_t dataSize) {
-    Node* root = createNode(0);  // Initialize with a root node
+internal
+U64 reverseBits(U64 value, U32 bitCount)
+{
+    Assert(bitCount <= 32);
+    U64 result = 0;
+    for(U32 bitIndex = 0;
+        bitIndex <= bitCount/2;
+        ++bitIndex)
+    {
+        U32 inv = (bitCount - (bitIndex + 1));
+        result |= ((value >> bitIndex) & 0x1 ) << inv;
+        result |= ((value >> inv) & 0x1) << bitIndex; 
+    }
     
-    // Loop through the encoded data and rebuild the tree
-    Node* currentNode = root;
-    size_t i = 0;
+    return result;
+}
+
+internal
+void BuildHuffman(HuffmanTable* huffman, U32* code_lengths, U32 LENGTHS_COUNT)
+{
+    constexpr U64 HUFFMAN_MAX_BIT_COUNT = 19;
+    U64 codeLengthsHistogram[HUFFMAN_MAX_BIT_COUNT] = {};
+
+    // DEFLATE spec for generating codes
+
+    // 1) Count the number of codes for each code length. Let bl count[N] be the number of codes of length N, N>= 1.
+    // Build the Histogram 
+    for (U64 i = 0; i < LENGTHS_COUNT; ++i) ++codeLengthsHistogram[code_lengths[i]];
+    codeLengthsHistogram[0] = 0;
+
     
-    while (i < dataSize) {
-        // Read a bit from the encoded data
-        unsigned char bit = encodedData[i] & 0x80;  // Get the most significant bit
-        int value = encodedData[i] & 0x7F;          // Get the remaining 7 bits as a value
-        
-        // Traverse the tree based on the bit (0 for left, 1 for right)
-        Node* nextNode = (bit == 0) ? currentNode->left : currentNode->right;
-        
-        if (nextNode == NULL) {
-            // If the node doesn't exist, create a new node and attach it
-            nextNode = createNode(value);
-            nextNode->parent = currentNode;
-            if (bit == 0) {
-                currentNode->left = nextNode;
-            } else {
-                currentNode->right = nextNode;
-            }
-            currentNode = root;  // Reset to the root for next iteration
-        } else if (nextNode->value == 0) {
-            // Internal node, continue traversal
-            currentNode = nextNode;
-        } else {
-            // Leaf node, emit the symbol and restart from the root
-            printf("Symbol: %d\n", nextNode->value);
-            currentNode = root;
-        }
-        
-        if (bit == 0) {
-            // Shift to the next bit if we used the current one
-            encodedData[i] = (encodedData[i] << 1);
-            if (encodedData[i] == 0) {
-                i++;  // Move to the next byte
+    // Find the numerical value of the smallest code for each code length:
+    U64 next_code[HUFFMAN_MAX_BIT_COUNT];
+    next_code[0] = 0;
+    
+    for (U64 bitIndex = 1; bitIndex < HUFFMAN_MAX_BIT_COUNT; bitIndex++) 
+    {
+        next_code[bitIndex] = (next_code[bitIndex - 1] +
+                               codeLengthsHistogram[bitIndex - 1]) << 1;
+    }
+    
+
+    // 
+    
+    for (U64 SymbolIndex = 0;
+         SymbolIndex < LENGTHS_COUNT;
+         SymbolIndex++)
+    {
+        U32 len = code_lengths[SymbolIndex];
+        if (len){
+            U64 code = next_code[len]++;
+            U64 arbitraryBits = huffman->maxBitLen - len;
+            U64 entryCount = ((U64)1 << arbitraryBits);
+            
+            for(U64 entryIndex = 0;
+                entryIndex < entryCount;
+                ++entryIndex)
+            {
+                U64 baseIndex = (code << arbitraryBits) | entryIndex;
+                // @Cleanup: This is slow -husamd
+                U64 index = reverseBits(baseIndex, huffman->maxBitLen);
+                
+                HuffmanTableEntry* entry = huffman->entries + index;
+                entry->symbol = (U16)SymbolIndex; 
+                entry->bitsUsed = (U16)len; 
             }
         }
     }
     
-    return root;
 }
 
-int main() {
-    // Example encoded data (you should replace this with your actual encoded data)
-    unsigned char encodedData[] = {0b10000001, 0b10101011};
-    size_t dataSize = sizeof(encodedData) / sizeof(encodedData[0]);
+internal
+U32 DecodeHuffman(HuffmanTable* huffman, StreamingBuffer* sb)
+{
+    U32 index = PeekBits(sb, huffman->maxBitLen);
+    Assert(index < huffman->entriesCount);
+
+    HuffmanTableEntry entry = huffman->entries[index];
+    U32 result = entry.symbol;
+
+    Assert(entry.bitsUsed > 0);
+    DiscardBits(sb, entry.bitsUsed);
+
+    return result;
+};
+
+
+Buffer deflate(StreamingBuffer sb)
+{
+    Buffer result;
+    result.content = nullptr;
+    result.size    = 0;
+
+    ZLIB_Header* zLibHeader = ConsumeType(&sb, ZLIB_Header);
+
+    if (zLibHeader->_cm.CM != 8 || zLibHeader->_flags.FDICT != 0)
+    {
+        print_string("\tError[deflate]: something is wrong with the commpression\n"_s);
+        return {0, 0};
+        //ExitProcess(1);
+    }
+
+
+    U32 BFINAL = ConsumeBits(&sb, 1);// this indecates that this is last block
+    U32 BTYPE  = ConsumeBits(&sb, 2);
+
+
+    if(0b00 == BTYPE)
+    {
+        print_verbos("    No Compression\n"_s);
+        FlushStreamingBufferBitBuffer(&sb);
+        U16 LEN    = *ConsumeType(&sb, U16); // LEN  is the number of data bytes in the block.
+        U16 NLEN   = *ConsumeType(&sb, U16); // NLEN is the one's complement of LEN.
+        void* data =  ConsumeSize(&sb, LEN);
+        //memcpy((U8*)image_data + pixels_index,
+        //      data,
+        //      LEN);
+    }
+    else if(0b01 == BTYPE)
+    {
+        print_verbos("    Fixed Huffman\n"_s);
+    }
+    else if(0b10 == BTYPE)
+    {
+        print_verbos("    Dynamic Huffman\n"_s);
+
+        HuffmanTable huffman = AllocateHuffman(7);
+        HuffmanTable hlitHuffman = AllocateHuffman(15);
+        HuffmanTable hdistHuffman = AllocateHuffman(15);
+        
+        constexpr U32 length_dezigzag[] = { 16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15 };
+        constexpr U8 LENGTHS_COUNT = sizeof(length_dezigzag)/sizeof(length_dezigzag[0]);
+        static_assert(LENGTHS_COUNT == 19);
+        
+        U32 HLIT  = ConsumeBits(&sb, 5) ;
+        HLIT += 257;
+        
+        U32 HDIST = ConsumeBits(&sb, 5);
+        HDIST += 1;
+        
+        U32 HCLEN = ConsumeBits(&sb, 4);
+        HCLEN += 4;
+        
+        /*
+          (HCLEN + 4) x 3 bits: code lengths for the code length
+          alphabet given just above, in the order: 16, 17, 18,
+          0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15
+          These code lengths are interpreted as 3-bit integers
+          (0-7); as above, a code length of 0 means the
+          corresponding symbol (literal/length or distance code
+          length) is not used.
+        */
+        
+        U32 code_lengths[LENGTHS_COUNT] = {};
+        for(U64 i = 0; i < HCLEN; i++)
+        {
+            U8 value = (U8)ConsumeBits(&sb, 3); // 3 bits cannot exceed the value 7 
+            code_lengths[length_dezigzag[i]] = value;
+        }
+        
+        // Build huffman table for code_lengths
+        BuildHuffman(&huffman, code_lengths, LENGTHS_COUNT);
+
+        // Read the code lengths for the literal/length alphabet into a streaming buffer 
+        //StreamingBuffer = 
+        
+        /*
+          HLIT + 257 code lengths for the literal/length alphabet,
+          encoded using the code length Huffman code
+        */
+
+        U32 counter = 0;
+
+        U32 new_code_lengths[512] = {}; // zero it for now
+        const auto limit = HLIT + HDIST;
+        while(counter < limit)
+        {
+            U32 code_length = DecodeHuffman(&huffman, &sb);
+            
+            U32 repeatValue = 0;
+            U32 repeatCount = 1;
+
+            if (code_length <= 15)
+            {
+                repeatValue = code_length;
+            }
+            else if (code_length == 16)
+            {
+                repeatCount = ConsumeBits(&sb, 2) + 3;
+                repeatValue = new_code_lengths[counter - 1];
+            }
+            else if (code_length == 17)
+            {
+                repeatCount = ConsumeBits(&sb, 3) + 3;
+            }
+            else if (code_length == 18)
+            {
+                repeatCount = ConsumeBits(&sb, 7) + 11;
+            }
+
+            while (repeatCount--)
+                new_code_lengths[counter++] = repeatValue;
+           
+        }
+        Assert(counter == limit);
+        
+        BuildHuffman(&hlitHuffman, new_code_lengths, HLIT);
+        BuildHuffman(&hdistHuffman, new_code_lengths + HLIT, HDIST);
+        
+        print_verbos("    End Dynamic Huffman\n"_s);
+
+
+        char buff[1024 *512] = {};
+        U32 buffIt = 0;
+        while(sb.size)
+        {
+            U32 code_or_len = DecodeHuffman(&hlitHuffman, &sb);
+            if (code_or_len < 256)
+            {
+                U8 code = (U8)code_or_len;
+                buff[buffIt++] = (char)code;
+            }
+            else if (code_or_len > 256)
+            {
+                U32 index = code_or_len - 257;
+                Assert(index < ArrayCount(HuffmanCompressedBlockLengthsMap));
+                U8 extraBits = HuffmanCompressedBlockLengthsMap[index];
+                
+                U32 len = 3 + index;
+                if (extraBits > 0){//husamd break and see tempVal
+                    auto tempVal = ConsumeBits(&sb, extraBits);
+                    len += (U32)reverseBits(tempVal, extraBits);
+                }
+
+                U32 distance = DecodeHuffman(&hdistHuffman, &sb);
+                Assert(distance < ArrayCount(HuffmanCompressedBlockDistancesMap));
+
+                extraBits = HuffmanCompressedBlockDistancesMap[distance];
+                distance += 1;
+                if (extraBits > 0){
+                    auto tempVal = ConsumeBits(&sb, extraBits);
+                    distance += (U32)reverseBits(tempVal, extraBits);
+                }
+
+                Assert(distance < buffIt);
+                auto it = buffIt - distance;
+                while(len--)
+                {
+                    buff[buffIt++] = buff[it++];
+                }
+            }
+            else
+            {
+                break;
+            }                 
+        }
+
+        String str = {buffIt, buff};
+        print_string(str);
+        print_string("\n"_s);
+    }
+    else if(0b11 == BTYPE)
+    {
+        print_verbos("Error\n"_s);
+        ExitProcess(1);
+    }
+
     
-    // Rebuild the adaptive Huffman tree
-    Node* root = rebuildTree(encodedData, dataSize);
     
-    // You can use the 'root' to navigate the Huffman tree and decode data
-    
-    // Don't forget to free the memory allocated for the tree when done
-    // (This example doesn't include memory cleanup for simplicity)
-    
-    return 0;
+    return result;
 }
-
-
-*/
-
-

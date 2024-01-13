@@ -255,7 +255,7 @@ typedef U64 Padding64;
 //~ Strings and String Views 
 struct String {
 	union {U64   length;  U64  size; };
-	union {char* str_char; S8*  str;   };
+	union {char* str_char; S8*  str; };
 };
 
 #define SV_SPECIFIER "%.*s"
@@ -299,9 +299,9 @@ struct ApplicationContext {
 };
 
 #define AllocateType(allocator, type) (type*)AllocateSize(allocator, sizeof(type));
-void* AllocateSize(LinearAllocator* allocator, Size size);
-void Initalize_LinearAllocate(LinearAllocator* allocator, Size size);
-void Free_LinearAllocate(LinearAllocator* allocator);
+void*   AllocateSize(LinearAllocator* allocator, Size size);
+void    Initalize_LinearAllocate(LinearAllocator* allocator, Size size);
+void    Free_LinearAllocate(LinearAllocator* allocator);
 
 
 #endif // HD_MEMORY
@@ -312,14 +312,19 @@ void Free_LinearAllocate(LinearAllocator* allocator);
 typedef HANDLE FileHandle;
 #endif
 
+struct Buffer {
+    U8* content;
+    U64 size;    
+};
+
 struct StreamingBuffer {
     U8* content;
     U64 size;
 
     StreamingBuffer* next;
     
-    U32 bitBuffer;
-    U32 bitCount;
+    U32 bitBuffer = 0;
+    U32 bitCount  = 0;
 };
 
 
@@ -389,15 +394,16 @@ String  ConsumeString(StreamingBuffer* buffer, U64 size);
         if (!x)                                                         \
         {                                                               \
             MessageBoxA(NULL,                                           \
-                        "Assert in file:"##FILE" on Line:"##LINE,       \
                         #x,                                             \
+                        "Assert in file:"##FILE" on Line:"##LINE,       \
                         MB_OK);                                         \
+            __debugbreak();                                             \
             ExitProcess(1);                                             \
         }                                                               \
     }
 
 
-#define Assert(x) Assert_s(x, __FILE__, LINE_STRING)
+#define Assert(x) Assert_s((x), __FILE__, LINE_STRING)
 #else
 #error please define Assert Macro
 #endif

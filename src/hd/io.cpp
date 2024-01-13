@@ -14,6 +14,12 @@
 inline internal
 void print_string(const String str)
 {
+    // ?? 
+    if(str.size == 0)
+    {
+        return;
+    }
+    
     HANDLE console = GetStdHandle(STD_OUTPUT_HANDLE);
     //CONSOLE_SCREEN_BUFFER_INFO old;
     //GetConsoleScreenBufferInfo(console, &old);
@@ -60,15 +66,11 @@ void FlushStreamingBufferBitBuffer(StreamingBuffer* buffer)
     buffer->bitBuffer = 0;
     buffer->bitCount = 0;
 }
-U32 ConsumeBits(StreamingBuffer* buffer, U32 bitCount)
-{
-    if (bitCount > 32)
-    {
-        // Assert here in debug
-        print_string("Size is too large\n"_s);
-        ExitProcess(1);
-    }
 
+internal 
+U32 PeekBits(StreamingBuffer* buffer, U32 bitCount)
+{
+    Assert(bitCount <= 32);
     // Fill our bitBuffer 
     while(buffer->bitCount < bitCount &&
           (buffer->size))
@@ -81,13 +83,27 @@ U32 ConsumeBits(StreamingBuffer* buffer, U32 bitCount)
     U32 result = 0;
     if (buffer->bitCount >= bitCount)
     {
-        buffer->bitCount -= bitCount;
         U32 bitCountOnesCompliment = (U32)(( 1 << bitCount) -1);
         result = buffer->bitBuffer & bitCountOnesCompliment;
+    }
+   
+    return result;
+}
+internal
+void DiscardBits(StreamingBuffer* buffer, U32 bitCount)
+{
+    
+    if (buffer->bitCount >= bitCount)
+    {
+        buffer->bitCount -= bitCount;
         buffer->bitBuffer >>= bitCount;
     }
+}
 
-    
+U32 ConsumeBits(StreamingBuffer* buffer, U32 bitCount)
+{
+    U32 result = PeekBits(buffer, bitCount);
+    DiscardBits(buffer, bitCount); 
     return result;
 }
 
