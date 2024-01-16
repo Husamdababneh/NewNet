@@ -19,7 +19,7 @@ rem in anycase, -Gs1048576 should equal the stack range, so unless we use 10mb o
 set common_flags=-F1048576 -Zi -FC -Gz -GS- -Gs1048576 -nologo  -diagnostics:caret -std:c++17 -Wall
 rem use the below flag when you want the warnings to be treated as errors
 rem -WX
-set debug_flags=-Od -EHa
+set debug_flags=-Od 
 set release_flags=-Ox 
 set flags=%common_flags% %debug_flags%
 REM COMPILER OPTIONS END
@@ -46,7 +46,7 @@ IF ERRORLEVEL 1 GOTO errorHandling
 
 REM LINK 
 pushd %bin_int%
-link  %object_files% %msvc_common_link_opts%  /OUT:..\..\bin\first.exe %debug_link_option%
+link  %object_files% %msvc_common_link_opts% /NATVIS:../../misc/strings.natvis  /OUT:..\..\bin\first.exe %debug_link_option%
 IF ERRORLEVEL 1 GOTO errorHandling
 popd
 
