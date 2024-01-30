@@ -14,24 +14,21 @@
 inline internal
 void print_string(const String str)
 {
-    // ?? 
-    if(str.size == 0)
-    {
-        return;
-    }
-    
-    HANDLE console = GetStdHandle(STD_OUTPUT_HANDLE);
     //CONSOLE_SCREEN_BUFFER_INFO old;
     //GetConsoleScreenBufferInfo(console, &old);
     //SetConsoleTextAttribute(console, FOREGROUND_RED);
 
-    // TODO(Husamd): Logic to print a string with more than 1024 chars 
-    constexpr U64 buffer_len = 1024;
-    char buffer[buffer_len] = {};
-    DWORD count = (DWORD) MIN((is_null_terminated(str) ? str.length - 1 : str.length), buffer_len);
-    memcpy(buffer, str.str_char, count);
+
+    if(str.size == 0)
+    {
+        return;
+    }
+
+    // Do i need to call this every time?? or what i dont know how expensive this is
+    HANDLE console = GetStdHandle(STD_OUTPUT_HANDLE);
     int output_size;
-    WriteConsole(console, buffer, count, (LPDWORD)&output_size, NULL);
+    WriteConsole(console, str.str_char, (DWORD)str.length, (LPDWORD)&output_size, NULL);
+    // GetLastError if something went wrong
     //SetConsoleTextAttribute(console, old.wAttributes);
 }
 

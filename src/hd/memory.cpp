@@ -34,6 +34,8 @@ void* memcpy(void* dest, const void* src, size_t count)
 #pragma function(memcmp)
 S32 memcmp(const void *str1, const void *str2, size_t n)
 {
+    if (n == 0)
+        return 0;
     U8 u1, u2;
     U8* s1 = (U8*)str1;
     U8* s2 = (U8*)str2;
@@ -45,6 +47,32 @@ S32 memcmp(const void *str1, const void *str2, size_t n)
         }
     }
     return 0;
+}
+
+internal
+MemoryBlock RequestMemoryBlock(Size size)
+{
+    MemoryBlock result;
+#ifdef OS_WINDOWS
+    result.memory =  HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, size);
+    result.size   =  size;
+#else
+#error("Not Implemented Yet")
+#endif
+
+    return result;
+}
+
+internal
+B8 FreeMemoryBlock(MemoryBlock result)
+{
+#ifdef OS_WINDOWS
+    if (result.memory)
+        HeapFree(GetProcessHeap(), NULL, result.memory);
+#else
+#error("Not Implemented Yet")
+#endif
+    return true;
 }
 
 
@@ -73,6 +101,15 @@ void Initalize_LinearAllocate(LinearAllocator* allocator, Size size)
     allocator->size    = size;
     
 }
+
+
+//- Linear Allocator
+void Reset_LinearAllocate(LinearAllocator* allocator)
+{
+    allocator->current = allocator->start;
+    //U8* it = (U8*)allocator->current;
+}
+
 
 
 void Free_LinearAllocate(LinearAllocator* allocator)

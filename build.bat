@@ -16,7 +16,8 @@ REM COMPILER OPTIONS START
 rem -Gs1048576
 rem It would be nice if i can implement __chkstk, but it seems that I cannot
 rem in anycase, -Gs1048576 should equal the stack range, so unless we use 10mb of stack memory the __chkstk procedure should not be called anyways -husamd
-set common_flags=-F1048576 -Zi -FC -Gz -GS- -Gs1048576 -nologo  -diagnostics:caret -std:c++17 -Wall
+set common_flags=-F1048576 -Zi -FC -Gz -GS- -Gs4048576 -nologo  -diagnostics:caret -std:c++17
+rem -Wall
 rem use the below flag when you want the warnings to be treated as errors
 rem -WX
 set debug_flags=-Od 
@@ -24,7 +25,7 @@ set release_flags=-Ox
 set flags=%common_flags% %debug_flags%
 REM COMPILER OPTIONS END
 
-set debug_link_option=/DEBUG:FULL /NOLOGO /INCREMENTAL:NO /NODEFAULTLIB /STACK:0X100000,0X100000 /PDB:"first.pdb" 
+set debug_link_option=/DEBUG:FULL /NOLOGO /INCREMENTAL:NO /NODEFAULTLIB /STACK:0X200000,0X200000 /PDB:"first.pdb" 
 
 IF /I "%1"=="release" ( set flags=%common_flags% %release_flags% ) 
 
@@ -34,9 +35,10 @@ set object_files=.\first.obj
 
 
 rem set entryProc=main
-set entryProc=test
+set entryProc=RemoveCRTTest
+rem RemoveCRTTest
 
-set LIBS=opengl32.lib Gdi32.lib User32.lib Kernel32.lib
+set LIBS=opengl32.lib Gdi32.lib User32.lib Kernel32.lib Dbghelp.lib
 
 set msvc_common_link_opts=/SUBSYSTEM:CONSOLE %LIBS% /ENTRY:%entryProc%
 

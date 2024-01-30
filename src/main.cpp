@@ -438,24 +438,32 @@ int  main()
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-        File file = open_file("../assets/Rock035.png"_s8);
+        File file = open_file("../assets/tests/8x8_uncompressed-no-interlace.png"_s8);
+        if (!file.handle)
+        {
+            print_string("Cannot find file\n"_s);
+            ExitProcess(1);
+        }
         void* memory = VirtualAlloc(0, (SIZE_T)file.size, MEM_COMMIT, PAGE_READWRITE);
         StreamingBuffer entire_file = read_entire_file(file, memory);
-        PNG_FILE image_info = parse_png_file(entire_file, &allocator);
+        //Image image = parse_png_file(entire_file, &allocator);
 
+
+        // TODO:
+        constexpr U32 image_size = 1920 * 1080 * 4 * 8;
         void* image_data = VirtualAlloc(0,
-                                  (SIZE_T)compute_requested_memory_size(&image_info),
-                                  MEM_COMMIT,
-                                  PAGE_READWRITE);
+                                        image_size,// (SIZE_T)compute_requested_memory_size(&image_info),
+                                        MEM_COMMIT,
+                                        PAGE_READWRITE);
              
         {
-            U64 pitch = image_info.width * 4;
+            U64 pitch = 1920 * 4;
             U8* pointer = (U8*)image_data;
             
-            for(U32 y = 0; y < image_info.height; y++)
+            for(U32 y = 0; y < 1080; y++)
             {
                 U32* pixel = (U32*) pointer;
-                for(U32 x = 0; x < image_info.width; x++)
+                for(U32 x = 0; x < 1920; x++)
                 {
                     pixel[x] = (U32)(y << 8 | x);
                     //pixel[x] = 0xFFFFFF;
@@ -464,12 +472,12 @@ int  main()
                 pointer += pitch;
             }
         }
-               
+        
         glTexImage2D(GL_TEXTURE_2D,
                      0,
                      GL_RGB,
-                     image_info.width,
-                     image_info.height,
+                     1920,//image_info.width,
+                     1080,//image_info.height,
                      0,
                      GL_RGBA,
                      GL_UNSIGNED_BYTE,
@@ -501,7 +509,7 @@ int  main()
             DispatchMessage(&message);
         }
 
-        title_fps_counter(window, start_counter, frequency);
+        //title_fps_counter(window, start_counter, frequency);
 
         //render(window, &offscreenBuffer);
         glClearColor(0.2f, 0.8f, 0.5f, 1.0f);

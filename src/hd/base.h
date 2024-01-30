@@ -44,14 +44,12 @@ TODO(Husam Dababneh): Architectures
 #endif
 
 #ifdef member_size
-#undef member_size
-   #define member_size(type, member) sizeof(((type *)0)->member) // this atually works :)
+    #undef member_size
+    #define member_size(type, member) sizeof(((type *)0)->member) // this atually works :)
 #endif
 
-#ifdef countof
-#undef countof
-   #define countof(x) sizeof(x) / sizeof(x[0])
-#endif
+#define countof(x) sizeof(x) / sizeof(x[0])
+
 
 
 //~ Compilers
@@ -298,11 +296,18 @@ struct ApplicationContext {
     Allocator allocator;
 };
 
+struct MemoryBlock {
+    void* memory;
+    Size size;
+};
+
 #define AllocateType(allocator, type) (type*)AllocateSize(allocator, sizeof(type));
 void*   AllocateSize(LinearAllocator* allocator, Size size);
 void    Initalize_LinearAllocate(LinearAllocator* allocator, Size size);
 void    Free_LinearAllocate(LinearAllocator* allocator);
 
+internal MemoryBlock RequestMemoryBlock(Size size);
+internal B8          FreeMemoryBlock(MemoryBlock);
 
 #endif // HD_MEMORY
 
@@ -408,6 +413,22 @@ String  ConsumeString(StreamingBuffer* buffer, U64 size);
 #error please define Assert Macro
 #endif
 
+
+#ifdef HD_TEMP_RESULT
+
+enum ResultStatus
+{
+    HD_ERROR,
+    HD_SUCCESS
+};
+
+template<typename R>
+struct _result {
+    ResultStatus status;
+    R result;
+};
+
+#endif // HD_TEMP_RESULT
 
 #endif //BASE_H
 

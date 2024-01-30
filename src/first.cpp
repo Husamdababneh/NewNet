@@ -22,7 +22,8 @@
 #pragma comment(lib,"User32.lib")
 #pragma comment(lib,"Gdi32.lib")
 
-
+// #ifdef debug
+#pragma comment(lib,"Dbghelp.lib")
 
 // @TODO(husamd): replace this with custom implementation
 #define STOP_WARNINGS
@@ -34,6 +35,7 @@
 #define HD_STRING
 #define HD_MEMORY
 #define HD_IO
+#define HD_TEMP_RESULT
 #include "hd/inc.inc"
 
 #include "strsafe.h"

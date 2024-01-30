@@ -11,7 +11,7 @@
 #include "image_internal.h"
 
 
-struct PNG_FILE_IHDR {
+struct PNG_Image_Info {
     U32 width;
     U32 height;
     U8 bit_depth;
@@ -35,5 +35,16 @@ struct PNG_FILE
     U8 padding1[3];
 };
 
+/*
+struct Image {
+    void* pixels;
+    U32 width, height;
+    U8 bit_depth;
+};
+*/
+
+
 PNG_FILE parse_png_file(StreamingBuffer entire_file, LinearAllocator* allocator);
+PNG_Image_Info get_png_image_info(StreamingBuffer entire_file);
+
 void load_png_image(PNG_FILE* image_info, void* image_data);

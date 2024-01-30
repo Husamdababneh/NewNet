@@ -154,7 +154,7 @@ OpenGLBackend createOpenGLBackend(HWND window)
         ExitProcess(0);
     }
 
-    MessageBoxA(0, glGetString(GL_VERSION), "OPENGL VERSION",0);
+    //MessageBoxA(0, glGetString(GL_VERSION), "OPENGL VERSION",0);
     // glCreateProgramProc glCreateProgram = TEST(glCreateProgram, glCreateProgramProc);
     // if (glCreateProgram == nullptr)
     // {

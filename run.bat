@@ -1,2 +1,4 @@
 @echo off
-call bin\first.exe
+pushd bin
+call first.exe
+popd

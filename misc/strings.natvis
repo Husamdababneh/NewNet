@@ -3,4 +3,14 @@
   <Type Name="String">
    <DisplayString>{str_char,[size]s}</DisplayString>
   </Type>
+  <Type Name="HuffmanTable">
+	<Expand>
+	  <ArrayItems>
+		<Item Name="[size]" ExcludeView="simple">entriesCount</Item>
+        <Item Name="[maxBitLen]" ExcludeView="simple">maxBitLen</Item>
+		<Size>entriesCount</Size>
+		<ValuePointer>entries</ValuePointer>
+      </ArrayItems>
+	</Expand>
+  </Type>
 </AutoVisualizer>
