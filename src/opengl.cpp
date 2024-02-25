@@ -43,6 +43,113 @@ Signature Load_OPENGL_PROC(const char* name)
 
 #define TEST(x,y) Load_OPENGL_PROC<y>(#x)
 
+/*
+GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR	0x824d
+GL_DEBUG_TYPE_ERROR	0x824c
+GL_DEBUG_TYPE_MARKER	0x8268
+GL_DEBUG_TYPE_OTHER	0x8251
+GL_DEBUG_TYPE_PERFORMANCE	0x8250
+GL_DEBUG_TYPE_POP_GROUP	0x826a
+GL_DEBUG_TYPE_PORTABILITY	0x824f
+GL_DEBUG_TYPE_PUSH_GROUP	0x8269
+GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR	0x824e
+*/
+
+
+char* getMessageType(U32 type)
+{
+    char* message = (char*)"UNKNOWN";
+    switch(type)
+    {
+      case 0x824d:
+      {
+          message = (char*)"Deprecated Behavior";
+      }break;
+      case 0x824c:
+      {
+          message = (char*)"Error";
+      }break;
+      case 0x8268:
+      {
+          message = (char*)"Marker";
+      }break;
+      case 0x8251:
+      {
+          message = (char*)"Other";
+      }break;
+      case 0x8250:
+      {
+          message = (char*)"Performance";
+      }break;
+      case 0x826a:
+      {
+          message = (char*)"Pop Group";
+      }break;
+      case 0x824f:
+      {
+          message = (char*)"Portability";
+      }break;
+      case 0x8269:
+      {
+          message = (char*)"Push Group";
+      }break;
+      case 0x824e:
+      {
+          message = (char*)"Undefined Behavior";
+      }break;
+    }
+    return message;
+}
+
+char* getMessageSeverity(U32 severity)
+{
+    if (severity == 0x826b)
+    {
+        return (char*)"Notification";
+    }
+    char* message = (char*)"UNKNOWN";
+    switch(severity)
+    {
+      case 37190:
+      {
+          message = (char*)"High";
+      }break;
+      case 37191:
+      {
+          message = (char*)"Medium";
+      }break;
+      case 37193:
+      {
+          message = (char*)"Low";
+      }break;
+    }
+    return message;
+}
+
+void __stdcall
+MessageCallback( U32 source,
+                 U32 type,
+                 U32 id,
+                 U32 severity,
+                 U32 length,
+                 const char* message,
+                 const void* userParam )
+{
+    // GL_DEBUG_TYPE_ERROR 0x824c
+    if (0x826b == severity) return;
+    const char formatString[] = "GL CALLBACK: [%s][%s]: %s\n";
+    constexpr U32 buff_size = 1024;
+    char buffer[buff_size] = {};
+    auto size = snprintf(buffer, buff_size, formatString,
+                         getMessageSeverity(severity),
+                         getMessageType(type),
+                         message );
+    String str = cstr_to_string(buffer, (U64)size);
+    print_string(str);
+    ExitProcess(0);
+}
+
+
 inline internal
 B8 LoadGLProcs()
 {
@@ -68,6 +175,7 @@ B8 LoadGLProcs()
     LOAD_OPENG_PROC(glBindVertexArray);
     LOAD_OPENG_PROC(glGenVertexArrays);
     LOAD_OPENG_PROC(glEnableVertexArrayAttrib);
+    LOAD_OPENG_PROC(glEnableVertexAttribArray);
     LOAD_OPENG_PROC(glVertexAttribPointer);
 
 
@@ -82,7 +190,8 @@ B8 LoadGLProcs()
     LOAD_OPENG_PROC(glGetUniformLocation);
     LOAD_OPENG_PROC(glUniform1i);
     LOAD_OPENG_PROC(glUniform1f);
-
+    LOAD_OPENG_PROC(glDebugMessageCallback); 
+    
     HMODULE lib = LoadLibraryA("opengl32.dll");
     if (lib == NULL)
     {
@@ -102,6 +211,12 @@ B8 LoadGLProcs()
     
     LOAD_OPENG_PROC_1_1(lib, glTexParameteri);
     LOAD_OPENG_PROC_1_1(lib, glTexImage2D);
+
+    LOAD_OPENG_PROC_1_1(lib, glFrontFace);
+    LOAD_OPENG_PROC_1_1(lib, glEnable);
+    LOAD_OPENG_PROC_1_1(lib, glViewport);
+
+    
     return true;
 }
 
@@ -143,6 +258,8 @@ OpenGLBackend createOpenGLBackend(HWND window)
     int const create_attribs[] = {
         WGL_CONTEXT_MAJOR_VERSION_ARB, 4,
         WGL_CONTEXT_MINOR_VERSION_ARB, 6,
+        WGL_CONTEXT_FLAGS_ARB, 0,
+        WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
         0
     };
     
@@ -153,6 +270,12 @@ OpenGLBackend createOpenGLBackend(HWND window)
     {
         ExitProcess(0);
     }
+
+
+    // 	GL_DEBUG_OUTPUT 0x92e0
+    // 	GL_DEBUG_OUTPUT 0x92e0
+    glEnable( 0x92e0 );
+    glDebugMessageCallback( MessageCallback, 0 );
 
     //MessageBoxA(0, glGetString(GL_VERSION), "OPENGL VERSION",0);
     // glCreateProgramProc glCreateProgram = TEST(glCreateProgram, glCreateProgramProc);

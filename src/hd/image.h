@@ -35,15 +35,20 @@ struct PNG_FILE
     U8 padding1[3];
 };
 
-/*
+enum ImageKind
+{
+    IMAGE_KIND_PNG
+};
+
 struct Image {
     void* pixels;
     U32 width, height;
     U8 bit_depth;
+    ImageKind kind;
 };
-*/
 
 
+Size calculate_image_needed_memory(StreamingBuffer entire_file);
 PNG_FILE parse_png_file(StreamingBuffer entire_file, LinearAllocator* allocator);
 PNG_Image_Info get_png_image_info(StreamingBuffer entire_file);
 

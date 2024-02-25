@@ -116,138 +116,346 @@ int test2(){
     
 }
 
-void SignalHandler(int signal)
-{
-    if (signal == SIGABRT) {
-        // abort signal handler code
-    } else {
-        // ...
-    }
-}
-
-
 struct structure {
     int a;
 };
 
-LONG WINAPI AccessViolationHandler (PEXCEPTION_POINTERS pExp);
-LONG WINAPI ArrayBoundsCheckHandler (PEXCEPTION_POINTERS info);
-void print_procedure_info(PVOID procedureAddress);
+void tt()
+{
+    NT_TIB *tib = (NT_TIB *) NtCurrentTeb();
+    ULONG_PTR lowLimit = (ULONG_PTR)tib->StackLimit;
+    ULONG_PTR highLimit = (ULONG_PTR)tib->StackBase;
+
+#if 1
+    constexpr auto BUFFER_SIZE = 1024 * 1024 * 8;
+    const char* formatString = "LARGE_INTEGER SIZE(%lld)\n";
+    char bigArray[BUFFER_SIZE] = {};
+#else 
+    //This is handled by `ExceptionHandler`
+    structure* struc = 0;
+    struc->a = 3;
+#endif
+}
+
+
+internal LONG WINAPI win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs);
+
+
+void test_vec2F32()
+{
+    Vec2F32 a = {1, 2};
+    Vec2F32 z = -a;
+    Vec2F32 b = {1, 2};
+    Vec2F32 c = a + b;
+    Vec2F32 d = a - b;
+    Vec2F32 e = a * b;
+    Vec2F32 f = a / b;
+    
+    constexpr U32 buffer_len = 1024;
+    char buffer[buffer_len]  = {};
+    const char* formatString       = R"str(
+a    =  {x = %f, y = %f}
+b    =  {x = %f, y = %f}
+c +  =  {x = %f, y = %f}
+d -  =  {x = %f, y = %f}
+e *  =  {x = %f, y = %f}
+f /  =  {x = %f, y = %f}
+-a   =  {x = %f, y = %f}
+)str";
+
+
+    S32 size = snprintf(buffer, buffer_len, formatString,
+                        a.x, a.y,
+                        b.x, b.y,
+                        c.x, c.y,
+                        d.x, d.y,
+                        e.x, e.y,
+                        f.x, f.y,
+                        z.x, z.y        );
+    String str = cstr_to_string(buffer, (U64)size);
+    print_string(str);
+}
+
+void test_vec3F32()
+{
+    Vec3F32 a0 = {3, 3, 3};
+    Vec3F32 a = {1, 2, 3};
+    Vec3F32 b = {1, 2, 3};
+    Vec3F32 c = a + b;
+    Vec3F32 d = a - b;
+    Vec3F32 e = a * b;
+    Vec3F32 f = a / b;
+    Vec3F32 g = e - a;
+
+    Vec3F32 cross_prod = cross(a, g);
+    F32 dot_prod = dot(a, g);
+    
+    constexpr U32 buffer_len = 1024;
+    char buffer[buffer_len]  = {};
+    const char* formatString = R"str(
+a0          =  {x = %f, y = %f, z = %f}
+a           =  {x = %f, y = %f, z = %f}
+b           =  {x = %f, y = %f, z = %f}
+c +         =  {x = %f, y = %f, z = %f}
+d -         =  {x = %f, y = %f, z = %f}
+e *         =  {x = %f, y = %f, z = %f}
+f /         =  {x = %f, y = %f, z = %f}
+g = e - a   =  {x = %f, y = %f, z = %f}
+a X g       =  {x = %f, y = %f, z = %f}
+a . g       =  %f
+)str";
+
+
+    S32 size = snprintf(buffer, buffer_len, formatString,
+                        a0.x, a0.y, a0.z,
+                        a.x, a.y, a.z,
+                        b.x, b.y, b.z,
+                        c.x, c.y, c.z,
+                        d.x, d.y, d.z,
+                        e.x, e.y, e.z,
+                        f.x, f.y, f.z,
+                        g.x, g.y, g.z,
+                        cross_prod.x, cross_prod.y, cross_prod.z,
+                        dot_prod);
+    String str = cstr_to_string(buffer, (U64)size);
+    print_string(str);
+}
+
 
 int RemoveCRTTest()
 {
-    // TODO: handle access violations
-    AddVectoredExceptionHandler (0, AccessViolationHandler);
-    AddVectoredExceptionHandler (0, ArrayBoundsCheckHandler);
+//    SetUnhandledExceptionFilter(&win32_exception_filter);
+    AddVectoredExceptionHandler(1, ExceptionHandler);
+
+    constexpr U32 buffer_len = 256;
+    char buffer[buffer_len]  = {};
+    const char* formatString       = "%f";
 
 
-	
-    
-    // structure* a = nullptr;
-    // a->a = 420;
-
-    // This should generate C4789 on msvc to report a buffer overrun
-    U32 array[69] = {};
-     array[69] = 420;
+    S32 size = snprintf(buffer, buffer_len, formatString,
+                        q_rsqrt(4.0f));
+    String str = cstr_to_string(buffer, (U64)size);
+    print_string(str);
+    test_vec3F32();
+    //test_vec2F32();
     return 0;
 }
 
-#include "dbghelp.h"
 
-// I might want to handle everything in one procedure since I might always exit
-// In case II don't want to exit I can write a procedure and give it a higher priority to handle the specific issue 
-LONG WINAPI AccessViolationHandler (PEXCEPTION_POINTERS info)
+#if 0
+internal B32 g_is_quiet = 0;
+
+
+internal LONG WINAPI
+win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
 {
-    PEXCEPTION_RECORD er = info->ExceptionRecord;
-    if(er->ExceptionCode == EXCEPTION_ACCESS_VIOLATION){
-        char stringBuffer[256] = {};
-        char* formatString = "Null Pointer Exception at %p\n";
-        auto a = (U64)snprintf(stringBuffer, 256, formatString, er->ExceptionAddress);
-        String s = {a, stringBuffer};
-        print_string(s);
-        // TODO: more info where this happens and if we can debug it
-        constexpr auto FLAG = EXCEPTION_NONCONTINUABLE;
-        print_procedure_info(er->ExceptionAddress);
-        if (er->ExceptionFlags & FLAG)
-        {
-            print_string("Exiting Program"_s);
-        }
-        ExitProcess(1);
-        //return EXCEPTION_CONTINUE_SEARCH ;        
-    }
-    return EXCEPTION_CONTINUE_SEARCH;
-}
-
-LONG WINAPI ArrayBoundsCheckHandler (PEXCEPTION_POINTERS info)
-{
-    PEXCEPTION_RECORD er = info->ExceptionRecord;
-    if(er->ExceptionCode == EXCEPTION_ARRAY_BOUNDS_EXCEEDED){
-        char stringBuffer[256] = {};
-        char* formatString = "Array Bounds Exception at %p\n";
-        auto a = (U64)snprintf(stringBuffer, 256, formatString, er->ExceptionAddress);
-        String s = {a, stringBuffer};
-        print_string(s);
-        // TODO: more info where this happens and if we can debug it
-        constexpr auto FLAG = EXCEPTION_NONCONTINUABLE;
-        print_procedure_info(er->ExceptionAddress);
-        if (er->ExceptionFlags & FLAG)
-        {
-            print_string("Exiting Program"_s);
-        }
-        ExitProcess(1);
-        //return EXCEPTION_CONTINUE_SEARCH ;        
-    }
-    return EXCEPTION_CONTINUE_SEARCH;
-}
-
-
-void print_procedure_info(PVOID procedureAddress)
-{
-    HANDLE hProcess = GetCurrentProcess();
-    SymInitialize(hProcess, NULL, TRUE);
-
-    DWORD64  dwDisplacement = 0;
-    DWORD64  dwAddress = (DWORD64)(*(&procedureAddress));
-
-    char StringBuffer[256] = {};
-    char buffer[sizeof(SYMBOL_INFO) + MAX_SYM_NAME * sizeof(TCHAR)];
-    PSYMBOL_INFO pSymbol = (PSYMBOL_INFO)buffer;
-
-    pSymbol->SizeOfStruct = sizeof(SYMBOL_INFO);
-    pSymbol->MaxNameLen = MAX_SYM_NAME;
-    if (SymFromAddr(hProcess, dwAddress, &dwDisplacement, pSymbol))
+  if(g_is_quiet)
+  {
+    ExitProcess(1);
+  }
+  
+  static volatile LONG first = 0;
+  if(InterlockedCompareExchange(&first, 1, 0) != 0)
+  {
+    // prevent failures in other threads to popup same message box
+    // this handler just shows first thread that crashes
+    // we are terminating afterwards anyway
+    for (;;) Sleep(1000);
+  }
+  
+  WCHAR buffer[4096] = {0};
+  int buflen = 0;
+  
+  DWORD exception_code = exception_ptrs->ExceptionRecord->ExceptionCode;
+  buflen += wnsprintfW(buffer + buflen,
+                       sizeof(buffer) - buflen,
+                       L"A fatal exception (code 0x%x) occurred. The process is terminating.\n",
+                       exception_code);
+  
+  // load dbghelp dynamically just in case if it is missing
+  HMODULE dbghelp = LoadLibraryA("dbghelp.dll");
+  if(dbghelp)
+  {
+    DWORD (WINAPI *dbg_SymSetOptions)(DWORD SymOptions);
+    BOOL (WINAPI *dbg_SymInitializeW)(HANDLE hProcess, PCWSTR UserSearchPath, BOOL fInvadeProcess);
+    BOOL (WINAPI *dbg_StackWalk64)(DWORD MachineType, HANDLE hProcess, HANDLE hThread,
+                                   LPSTACKFRAME64 StackFrame, PVOID ContextRecord,
+                                   PREAD_PROCESS_MEMORY_ROUTINE64 ReadMemoryRoutine,
+                                   PFUNCTION_TABLE_ACCESS_ROUTINE64 FunctionTableAccessRoutine,
+                                   PGET_MODULE_BASE_ROUTINE64 GetModuleBaseRoutine,
+                                   PTRANSLATE_ADDRESS_ROUTINE64 TranslateAddress);
+    
+    PVOID (WINAPI *dbg_SymFunctionTableAccess64)(HANDLE hProcess, DWORD64 AddrBase);
+    DWORD64 (WINAPI *dbg_SymGetModuleBase64)(HANDLE hProcess, DWORD64 qwAddr);
+    BOOL (WINAPI *dbg_SymFromAddrW)(HANDLE hProcess, DWORD64 Address, PDWORD64 Displacement, PSYMBOL_INFOW Symbol);
+    BOOL (WINAPI *dbg_SymGetLineFromAddrW64)(HANDLE hProcess, DWORD64 dwAddr, PDWORD pdwDisplacement,
+                                             PIMAGEHLP_LINEW64 Line);
+    BOOL (WINAPI *dbg_SymGetModuleInfoW64)(HANDLE hProcess, DWORD64 qwAddr, PIMAGEHLP_MODULEW64 ModuleInfo);
+    
+    *(FARPROC*)&dbg_SymSetOptions            = GetProcAddress(dbghelp, "SymSetOptions");
+    *(FARPROC*)&dbg_SymInitializeW           = GetProcAddress(dbghelp, "SymInitializeW");
+    *(FARPROC*)&dbg_StackWalk64              = GetProcAddress(dbghelp, "StackWalk64");
+    *(FARPROC*)&dbg_SymFunctionTableAccess64 = GetProcAddress(dbghelp, "SymFunctionTableAccess64");
+    *(FARPROC*)&dbg_SymGetModuleBase64       = GetProcAddress(dbghelp, "SymGetModuleBase64");
+    *(FARPROC*)&dbg_SymFromAddrW             = GetProcAddress(dbghelp, "SymFromAddrW");
+    *(FARPROC*)&dbg_SymGetLineFromAddrW64    = GetProcAddress(dbghelp, "SymGetLineFromAddrW64");
+    *(FARPROC*)&dbg_SymGetModuleInfoW64      = GetProcAddress(dbghelp, "SymGetModuleInfoW64");
+    
+    if(dbg_SymSetOptions &&
+       dbg_SymInitializeW &&
+       dbg_StackWalk64 &&
+       dbg_SymFunctionTableAccess64 &&
+       dbg_SymGetModuleBase64 &&
+       dbg_SymFromAddrW &&
+       dbg_SymGetLineFromAddrW64 &&
+       dbg_SymGetModuleInfoW64)
     {
-        print_string("Procedure Name:["_s);
-        String symbolName = {(U64)pSymbol->NameLen, pSymbol->Name};
-        print_string(symbolName);
-        print_string("]\n"_s);
-        IMAGEHLP_LINE               il;
-        IMAGEHLP_MODULE             im;
-
-
-        char* formatString = "Filename [%s:%lu] in %s";
+      HANDLE process = GetCurrentProcess();
+      HANDLE thread = GetCurrentThread();
+      CONTEXT* context = exception_ptrs->ContextRecord;
+      
+      dbg_SymSetOptions(SYMOPT_EXACT_SYMBOLS | SYMOPT_FAIL_CRITICAL_ERRORS | SYMOPT_LOAD_LINES | SYMOPT_UNDNAME);
+      if(dbg_SymInitializeW(process, L"", TRUE))
+      {
+        // check that raddbg.pdb file is good
+        B32 raddbg_pdb_valid = 0;
+        {
+          IMAGEHLP_MODULEW64 module = {0};
+          module.SizeOfStruct = sizeof(module);
+          if(dbg_SymGetModuleInfoW64(process, (DWORD64)&win32_exception_filter, &module))
+          {
+            raddbg_pdb_valid = (module.SymType == SymPdb);
+          }
+        }
         
-        il.SizeOfStruct = sizeof(il);
-        im.SizeOfStruct = sizeof(im);
-        SymGetLineFromAddr64(hProcess, dwAddress, (PDWORD)&dwDisplacement, &il);
-        SymGetModuleInfo(hProcess, dwAddress, &im);
-        auto a = (U64)snprintf(StringBuffer,
-                               256,
-                               formatString,
-                               //args
-                               il.FileName,
-                               il.LineNumber,
-                               im.ModuleName);
-
-        String s = {a, StringBuffer};
-        print_string(s);
+        if(!raddbg_pdb_valid)
+        {
+          buflen += wnsprintfW(buffer + buflen,
+                               sizeof(buffer) - buflen,
+                               L"\nraddbg.pdb debug file is not valid or not found. Please rebuild binary to get call stack.\n");
+        }
+        else
+        {
+          STACKFRAME64 frame = {0};
+          DWORD image_type;
+#if defined(_M_AMD64)
+          image_type = IMAGE_FILE_MACHINE_AMD64;
+          frame.AddrPC.Offset = context->Rip;
+          frame.AddrPC.Mode = AddrModeFlat;
+          frame.AddrFrame.Offset = context->Rbp;
+          frame.AddrFrame.Mode = AddrModeFlat;
+          frame.AddrStack.Offset = context->Rsp;
+          frame.AddrStack.Mode = AddrModeFlat;
+#elif defined(_M_ARM64)
+          image_type = IMAGE_FILE_MACHINE_ARM64;
+          frame.AddrPC.Offset = context->Pc;
+          frame.AddrPC.Mode = AddrModeFlat;
+          frame.AddrFrame.Offset = context->Fp;
+          frame.AddrFrame.Mode = AddrModeFlat;
+          frame.AddrStack.Offset = context->Sp;
+          frame.AddrStack.Mode = AddrModeFlat;
+#else
+#  error Architecture not supported!
+#endif
+          
+          for(U32 idx=0; ;idx++)
+          {
+            const U32 max_frames = 32;
+            if(idx == max_frames)
+            {
+              buflen += wnsprintfW(buffer + buflen, sizeof(buffer) - buflen, L"...");
+              break;
+            }
+            
+            if(!dbg_StackWalk64(image_type,
+                                process,
+                                thread,
+                                &frame,
+                                context,
+                                0,
+                                dbg_SymFunctionTableAccess64,
+                                dbg_SymGetModuleBase64,
+                                0)
+                )
+            {
+              break;
+            }
+            
+            U64 address = frame.AddrPC.Offset;
+            if(address == 0)
+            {
+              break;
+            }
+            
+            if(idx==0)
+            {
+              buflen += wnsprintfW(buffer + buflen, sizeof(buffer) - buflen,
+                                   L"\nPress Ctrl+C to copy this text to clipboard, then create a new issue in\n"
+                                   L"<a href=\"%S\">%S</a>\n\n", RADDBG_GITHUB_ISSUES, RADDBG_GITHUB_ISSUES);
+              buflen += wnsprintfW(buffer + buflen, sizeof(buffer) - buflen, L"Call stack:\n");
+            }
+            
+            buflen += wnsprintfW(buffer + buflen, sizeof(buffer) - buflen, L"%u. [0x%I64x]", idx, address);
+            
+            struct {
+              SYMBOL_INFOW info;
+              WCHAR name[MAX_SYM_NAME];
+            } symbol = {0};
+            
+            symbol.info.SizeOfStruct = sizeof(symbol.info);
+            symbol.info.MaxNameLen = MAX_SYM_NAME;
+            
+            DWORD64 displacement = 0;
+            if(dbg_SymFromAddrW(process, address, &displacement, &symbol.info))
+            {
+              buflen += wnsprintfW(buffer + buflen,
+                                   sizeof(buffer) - buflen,
+                                   L" %s +%u",
+                                   symbol.info.Name,
+                                   (DWORD)displacement);
+              
+              IMAGEHLP_LINEW64 line = {0};
+              line.SizeOfStruct = sizeof(line);
+              
+              DWORD line_displacement = 0;
+              if(dbg_SymGetLineFromAddrW64(process, address, &line_displacement, &line))
+              {
+                buflen += wnsprintfW(buffer + buflen,
+                                     sizeof(buffer) - buflen,
+                                     L", %s line %u",
+                                     PathFindFileNameW(line.FileName), line.LineNumber);
+              }
+            }
+            else
+            {
+              IMAGEHLP_MODULEW64 module = {0};
+              module.SizeOfStruct = sizeof(module);
+              if(dbg_SymGetModuleInfoW64(process, address, &module))
+              {
+                buflen += wnsprintfW(buffer + buflen, sizeof(buffer) - buflen, L" %s", module.ModuleName);
+              }
+            }
+            
+            buflen += wnsprintfW(buffer + buflen, sizeof(buffer) - buflen, L"\n");
+          }
+        }
+      }
     }
-    else
-    {
-        memset(StringBuffer, 0, 256);
-        char* formatString2 = "SymFromAddr returned error : %d\n";
-        auto a = (U64)snprintf(StringBuffer, 256, formatString2, GetLastError());
-        String s = {a, StringBuffer};
-        print_string(s);
-    }
+  }
+  
+  // remove last newline
+  buffer[buflen] = 0;
+  
+  TASKDIALOGCONFIG dialog = {0};
+  dialog.cbSize = sizeof(dialog);
+  dialog.dwFlags = TDF_SIZE_TO_CONTENT | TDF_ENABLE_HYPERLINKS | TDF_ALLOW_DIALOG_CANCELLATION;
+  dialog.pszMainIcon = TD_ERROR_ICON;
+  dialog.dwCommonButtons = TDCBF_CLOSE_BUTTON;
+  dialog.pszWindowTitle = L"Fatal Exception";
+  dialog.pszContent = buffer;
+  dialog.pfCallback = &win32_dialog_callback;
+  TaskDialogIndirect(&dialog, 0, 0, 0);
+  
+  ExitProcess(1);
 }
+#endif

@@ -240,7 +240,6 @@ typedef U64 Padding64;
 
 
 // Casey Muratori way of differentiating between the meaning of static in different locations
-
 // Static Local variable
 #define local_presist static 
 // Global variable
@@ -248,149 +247,7 @@ typedef U64 Padding64;
 // translation-unit scope function
 #define internal static  
 
-#ifdef HD_STRING
-
-//~ Strings and String Views 
-struct String {
-	union {U64   length;  U64  size; };
-	union {char* str_char; S8*  str; };
-};
-
-#define SV_SPECIFIER "%.*s"
-#define SV_PRINT(x)  (int)x.length, x.str
-
-typedef   String StringView; // do i need this ?
-constexpr String    operator ""_s (const char* string, U64 length);
-constexpr const S8* operator ""_s8(const char* string, U64 length);
-internal inline    String cstr_to_string(char* string, U64 length);
-internal inline    String cstr_to_string(char* string);
-internal inline    B64    is_null_terminated(const String str);
-internal inline    S8     compare_strings(const String left, const String right);
-internal inline    B8     is_strings_equal(const String left, const String right);
-internal inline    String sub_str(const String str, U64 offset);
-
-
-#endif // HD_STRING
-
 #endif // HD_TYPES
-
-
-#ifdef HD_MEMORY
-
-struct Allocator {
-    HANDLE heap;
-    U64    requested_address;
-    void*  start;
-    void*  cursor;
-    Size   size;
-};
-
-struct LinearAllocator {
-    HANDLE heap;
-    void*  start;
-    void*  current;
-    Size   size;
-};
-
-struct ApplicationContext {
-    Allocator allocator;
-};
-
-struct MemoryBlock {
-    void* memory;
-    Size size;
-};
-
-#define AllocateType(allocator, type) (type*)AllocateSize(allocator, sizeof(type));
-void*   AllocateSize(LinearAllocator* allocator, Size size);
-void    Initalize_LinearAllocate(LinearAllocator* allocator, Size size);
-void    Free_LinearAllocate(LinearAllocator* allocator);
-
-internal MemoryBlock RequestMemoryBlock(Size size);
-internal B8          FreeMemoryBlock(MemoryBlock);
-
-#endif // HD_MEMORY
-
-
-
-#ifdef OS_WINDOWS
-typedef HANDLE FileHandle;
-#endif
-
-struct Buffer {
-    U8* content;
-    U64 size;    
-};
-
-struct StreamingBuffer {
-    U8* content;
-    U64 size;
-
-    StreamingBuffer* next;
-    
-    U32 bitBuffer = 0;
-    U32 bitCount  = 0;
-};
-
-
-struct StreamingBufferLL {
-    StreamingBuffer* first;
-    StreamingBuffer* last;
-};
-
-
-struct File {
-    union {
-        FileHandle windows_file_handle;
-        void* handle;
-    };
-    U64 size;
-    U8* content; 
-};
-
-/*
- * I want this API to be able to
- * 1 - Open a file Without Reading it, just get a handle to the file 
- * 2 - Read entire file to memory, either by giving it a memory block, or giving it a memory allocator 
- * 3 - Write to file, i would prefer to write a the whole buffer at once
- *     * Maybe i want to have the ability to write at a specific location (insert)
- * 4 - Close the file
- * 5 - Get file size without getting handle? 
- */
-
-
-File open_file(const S8* path);
-File open_file(String path);
-void close_file(File file);
-
-Size get_file_size(File file); // i dont think we need this 
-StreamingBuffer read_entire_file(File file);
-StreamingBuffer read_entire_file(File file, void* block);
-
-B8 write_file(File file, StreamingBuffer content);
-
-
-internal inline void bswap_ip(U16* value);
-internal inline void bswap_ip(U32* value);
-internal inline void bswap_ip(U64* value);
-
-internal inline U16 bswap_ip(U16 value);
-internal inline U32 bswap_ip(U32 value);
-internal inline U64 bswap_ip(U64 value);
-
-
-
-
-inline internal void print_string(const String str);
-inline internal void print_verbos(const String str);
-
-#define ConsumeType(buffer, type) (type*)ConsumeSize(buffer, sizeof(type))
-void*   ConsumeSize(StreamingBuffer* buffer, U64 size);
-void    FlushStreamingBufferBitBuffer(StreamingBuffer* buffer);
-U32     ConsumeBits(StreamingBuffer* buffer, U32 bitCount);
-
-String  ConsumeCString(StreamingBuffer* buffer);
-String  ConsumeString(StreamingBuffer* buffer, U64 size);
 
 
 #if OS_WINDOWS
@@ -406,34 +263,10 @@ String  ConsumeString(StreamingBuffer* buffer, U64 size);
             ExitProcess(1);                                             \
         }                                                               \
     }
-
-
 #define Assert(x) Assert_s((x), __FILE__, LINE_STRING)
 #else
 #error please define Assert Macro
 #endif
 
-
-#ifdef HD_TEMP_RESULT
-
-enum ResultStatus
-{
-    HD_ERROR,
-    HD_SUCCESS
-};
-
-template<typename R>
-struct _result {
-    ResultStatus status;
-    R result;
-};
-
-#endif // HD_TEMP_RESULT
-
-#endif //BASE_H
-
-
-
-
-
+#endif
 

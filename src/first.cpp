@@ -7,7 +7,7 @@
     ========================================================================*/
 
 
-#include "win32_nocrt.cpp"
+
 
 
 #define _STRSAFE_H_INCLUDED_
@@ -37,6 +37,8 @@
 #define HD_IO
 #define HD_TEMP_RESULT
 #include "hd/inc.inc"
+
+#include "win32_nocrt.cpp"
 
 #include "strsafe.h"
 #include "main.h"

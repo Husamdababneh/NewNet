@@ -6,6 +6,8 @@
    $Description: 
     ========================================================================*/
 
+#include "memory.h"
+
 
 #pragma function(memset)
 void* memset(void* dest, int c, size_t count)

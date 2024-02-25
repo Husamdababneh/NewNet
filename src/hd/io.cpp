@@ -9,6 +9,8 @@
 
 #ifdef HD_IO
 
+#include "io.h"
+
 #define _HD_VERBOS
 
 inline internal

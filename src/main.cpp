@@ -9,7 +9,7 @@
 
 
 global_variable B8 running = true;
-
+global_variable OpenGLBackend backEnd = {};
 
 struct Win32_OffscreenBuffer {
     BITMAPINFO info;
@@ -199,6 +199,10 @@ MainWindowCallback(HWND   hWindow,
           //(handled);
           //handled = true;
       } break;
+      case WM_SIZE:
+      {
+          if (backEnd.context) glViewport(0, 0, LOWORD(lParam), HIWORD(lParam));
+      }break;
       default:
       {
           result = DefWindowProc(hWindow, message, wParam, lParam);
@@ -233,7 +237,7 @@ void title_fps_counter(
         (DWORD_PTR)ms.QuadPart        
     };
 
-    char* formatString = "counts:%lld| frequency:%lld| fps:%lld| ms:%lld";
+    const char* formatString = "counts:%lld| frequency:%lld| fps:%lld| ms:%lld";
 
     snprintf((char*)buf, 100, formatString,
              counts.QuadPart,   
@@ -249,29 +253,19 @@ void title_fps_counter(
 const char *vertexShaderSource = R"str(
     #version 330 core
     layout (location = 0) in vec3 aPos;
-    layout (location = 1) in vec2 aTexCoord;
-
-    uniform float scaleFactor;
-    out vec2 TexCoord;
-
+    layout (location = 1) in vec2 uv;
     void main()
     {
-       TexCoord = vec2(aTexCoord.x, aTexCoord.y);
-       gl_Position = vec4(aPos.x * scaleFactor, aPos.y * scaleFactor, aPos.z, 1.0);
+       gl_Position = vec4(aPos.xyz, 1.0);
     }
 )str";
 
 const char *fragmentShaderSource = R"str(
     #version 330 core
-
-    in  vec2 TexCoord;
     out vec4 FragColor;
-
-    uniform sampler2D texture1;
-
     void main()
     {
-       FragColor = texture(texture1, TexCoord);//vec4(1.0f, 0.5f, 0.2f, 1.0f);
+       FragColor = vec4(1.0f, 0.0f, 0.94f, 1.0f);
     }
 )str";
 
@@ -290,18 +284,21 @@ Item init_object()
     Item obj = {};
     /*
     F32 vertices[] = {
-         0.5f,  0.5f, 0.0f, 1.0f, 1.0f, // top right
+         0.5f,  0.5f, 0.0f, 1.0f, 1.0f,  // top right
          0.5f, -0.5f, 0.0f, 1.0f, 0.0f,  // bottom right
         -0.5f, -0.5f, 0.0f, 1.0f, 0.0f,  // bottom left
         -0.5f,  0.5f, 0.0f, 1.0f, 0.0f   // top left 
     };
     */
+
     F32 vertices[] = {
-          1.0f,  1.0f, 0.0f, 1.0f, 1.0f, // top right
-          1.0f, -1.0f, 0.0f, 1.0f, 0.0f,  // bottom right
-         -1.0f, -1.0f, 0.0f, 1.0f, 0.0f,  // bottom left
-         -1.0f,  1.0f, 0.0f, 1.0f, 0.0f   // top left 
+          0.5f,  0.5f, 0.0f, 1.0f, 1.0f, // top right
+          0.5f, -0.5f, 0.0f, 1.0f, 0.0f,  // bottom right
+         -0.5f, -0.5f, 0.0f, 1.0f, 0.0f,  // bottom left
+         -0.5f,  0.5f, 0.0f, 1.0f, 0.0f   // top left 
     };
+
+
     
     U32 indices[] = {  // note that we start from 0!
         0, 1, 3,   // first triangle
@@ -315,19 +312,22 @@ Item init_object()
     glGenBuffers(1, &obj.vbo);
     glGenBuffers(1, &obj.ebo);
 
-    glBindVertexArray(obj.vao);
-    glBindBuffer(GL_ARRAY_BUFFER, obj.vbo);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, obj.ebo);
-    
     // Populate Generated buffers 
+    glBindVertexArray(obj.vao);
+
+    glBindBuffer(GL_ARRAY_BUFFER, obj.vbo);
     glNamedBufferData(obj.vbo, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, obj.ebo);
     glNamedBufferData(obj.ebo, sizeof(indices), indices, GL_STATIC_DRAW);
     
     // We don't have glNamedVertexAttribPointer so we need to bind it before using it 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
-    glEnableVertexArrayAttrib(obj.vao, 0);
-    glEnableVertexArrayAttrib(obj.vao, 1);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(F32), (void*)0);
+    glEnableVertexAttribArray(0);
+    //glEnableVertexArrayAttrib(obj.vao, 0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(F32), (void*)(3 * sizeof(F32)));
+    glEnableVertexAttribArray(1);
+    //glEnableVertexArrayAttrib(obj.vao, 1);
 
 
     // Shaders
@@ -354,6 +354,16 @@ Item init_object()
     return obj;
 }
 #pragma auto_inline(on)
+
+void free_buffers(Item obj)
+{
+    /*
+      glDeleteVertexArrays(obj.vao);
+      glDeleteBuffers(obj.vbo);
+      glDeleteBuffers(obj.ebo);
+      glDeleteProgram(obj.shaderProgram);
+    */
+}
 
 
 U32 compute_requested_memory_size(PNG_FILE* image)
@@ -409,11 +419,12 @@ int  main()
     // NOTE(husamd): OpenGL For now 
     // Create openGL context
     
-    OpenGLBackend backEnd = createOpenGLBackend(window);
-
+    backEnd = createOpenGLBackend(window);
+    WindowDimentions dimentions = win32_get_window_dimentions(window);
+    glViewport(0, 0, dimentions.width, dimentions.height);
     // TODO: Treat this as a scratch buffer 
     LinearAllocator allocator;
-    Initalize_LinearAllocate(&allocator, KB(4));
+    Initalize_LinearAllocate(&allocator, MB(1));
 
     
     LARGE_INTEGER start_counter, frequency; //, end_counter, counts, fps, ms;
@@ -426,6 +437,7 @@ int  main()
     U32 texture1;
     S32 uniformLocation;
     S32 scaleFactorUniform;
+#if 0
     {
         glGenTextures(1, &texture1);
         glBindTexture(GL_TEXTURE_2D, texture1);
@@ -437,18 +449,23 @@ int  main()
             // set texture filtering parameters
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
         File file = open_file("../assets/tests/8x8_uncompressed-no-interlace.png"_s8);
         if (!file.handle)
         {
             print_string("Cannot find file\n"_s);
             ExitProcess(1);
         }
+        
         void* memory = VirtualAlloc(0, (SIZE_T)file.size, MEM_COMMIT, PAGE_READWRITE);
         StreamingBuffer entire_file = read_entire_file(file, memory);
-        //Image image = parse_png_file(entire_file, &allocator);
+        PNG_FILE png = parse_png_file(entire_file, &allocator);
+        // @CleanUp(husamd): for now
+        // png.width*png.height pixel
+        // each pixel is 4 bytes
+        // + 1 for the png calculation
+        U64 neededMemory = png.width * (png.height + 1) * 4; 
 
-
+        
         // TODO:
         constexpr U32 image_size = 1920 * 1080 * 4 * 8;
         void* image_data = VirtualAlloc(0,
@@ -494,8 +511,12 @@ int  main()
         scaleFactorUniform = glGetUniformLocation(obj.shaderProgram, "scaleFactor");
         glUniform1f(scaleFactorUniform, 1.5);
     }
-    
+#endif
 
+    //scaleFactorUniform = glGetUniformLocation(obj.shaderProgram, "scaleFactor");
+
+    //glFrontFace(GL_CW);
+    
     while(running)
     {
         MSG message;
@@ -512,25 +533,29 @@ int  main()
         //title_fps_counter(window, start_counter, frequency);
 
         //render(window, &offscreenBuffer);
-        glClearColor(0.2f, 0.8f, 0.5f, 1.0f);
+        glClearColor(0.8f, 0.8f, 0.5f, 1.0f);
+        //glClearColor(1.f, 0.0f, 0.94f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
         
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, texture1);
+        //glActiveTexture(GL_TEXTURE0);
+        //glBindTexture(GL_TEXTURE_2D, texture1);
 
         // seeing as we only have a single VAO there's no need to bind it every time,
         // but we'll do so to keep things a bit more organized
         glBindVertexArray(obj.vao);
         glUseProgram(obj.shaderProgram);
-        //glUniform1f(uniformLocation, 0.5);
-        glDrawElements(0x4, 6, 0x1405, nullptr);
+        //glUniform1f(scaleFactorUniform, 0.5);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
         
         
         SwapBuffers(windowContext );
     }
     
+    // delete our buffers
+    free_buffers(obj);
 
+    
     // NOTE(husamd): I wish defer is a thing in c/c++
     {
         

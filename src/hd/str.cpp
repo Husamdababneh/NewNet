@@ -6,11 +6,8 @@
    $Description: 
     ========================================================================*/
 
-#include "base.h"
+#include "str.h"
 
-
-
-#ifdef HD_STRING
 constexpr //static inline
 String operator ""_s(const char* string, U64 length)
 {
@@ -96,4 +93,3 @@ String sub_str(const String str, U64 offset)
 	return String{str.length - offset, (char*)str.str + offset};
 }
 
-#endif // HD_STRING

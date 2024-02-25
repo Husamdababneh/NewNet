@@ -7,4 +7,4 @@
 #include "memory.cpp"
 #include "str.cpp"
 #include "io.cpp"
-
+#include "math.cpp"

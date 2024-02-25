@@ -22,8 +22,6 @@ extern "C" {
 #define GL_FLOAT                0x1406
 #define GL_FALSE                0x0
 #define GL_COLOR_BUFFER_BIT     0x4000
-#define GL_TRIANGLES            0x4
-#define GL_UNSIGNED_INT         0x1405
 #define GL_VERSION              0x1f02
 
 #define GL_TEXTURE_2D           0xde1
@@ -34,8 +32,6 @@ extern "C" {
 
 #define GL_REPEAT            	0x2901
 #define GL_LINEAR               0x2601
-
-#define GL_UNSIGNED_BYTE        0x1401
 
 #define GL_TEXTURE0             0x84c0
 
@@ -48,12 +44,47 @@ extern "C" {
 #define WGL_CONTEXT_FLAGS_ARB                   0x2094
 #define WGL_CONTEXT_PROFILE_MASK_ARB            0x9126
 
+#define WGL_CONTEXT_CORE_PROFILE_BIT_ARB        0x00000001
+
+
 /*
  * GLenum  -> u32 
  * GLuint  -> u32
  * GLsizei -> u32
  */
 
+
+// GLenum(GLDrawElementsMode)
+enum GLDrawElementsMode : U32
+{
+    GL_POINTS     = 0x0,
+    GL_LINE_STRIP = 0x3,
+    GL_TRIANGLES  = 0x4
+    /*
+      GL_LINE_LOOP ; 
+      GL_LINES ; 
+      GL_LINE_STRIP_ADJACENCY ; 
+      GL_LINES_ADJACENCY ; 
+      GL_TRIANGLE_STRIP ; 
+      GL_TRIANGLE_FAN ; 
+      GL_TRIANGLE_STRIP_ADJACENCY ; 
+      GL_TRIANGLES_ADJACENCY ;
+      GL_PATCHES ;
+    */
+};
+
+enum GLDrawElementsType : U32
+{
+    GL_UNSIGNED_BYTE  = 0x1401,
+    GL_UNSIGNED_SHORT = 0x1403,
+    GL_UNSIGNED_INT   = 0x1405,
+};
+
+enum GLFrontFaceMode : U32
+{
+    GL_CW  = 0x900,
+    GL_CCW = 0x901,
+};
 
 
 #define PROC_DECLARATION(returnType, name,...)\
@@ -82,8 +113,9 @@ PROC_DECLARATION(void,  glNamedBufferData, U32, U32, const void*, U32);
 PROC_DECLARATION(void,  glBindVertexArray, U32);
 PROC_DECLARATION(void,  glGenVertexArrays, U32, U32*);
 PROC_DECLARATION(void,  glEnableVertexArrayAttrib, U32, U32);
+PROC_DECLARATION(void,  glEnableVertexAttribArray, U32);
 PROC_DECLARATION(void,  glVertexAttribPointer, U32, S32, U32, U8, U32, const void *);
-PROC_DECLARATION(void,  glDrawElements, U32, U32, U32, const void*);
+PROC_DECLARATION(void,  glDrawElements, GLDrawElementsMode, U32, GLDrawElementsType, const void*);
 PROC_DECLARATION(void,  glClearColor, F32,F32,F32,F32);
 PROC_DECLARATION(void,  glClear, U32);
 PROC_DECLARATION(char*, glGetString, U32);
@@ -97,6 +129,21 @@ PROC_DECLARATION(void,  glActiveTexture, U32);
 PROC_DECLARATION(S32 ,  glGetUniformLocation, U32, const char*);
 PROC_DECLARATION(void,  glUniform1i, S32, S32);
 PROC_DECLARATION(void,  glUniform1f, S32, F32);
+
+PROC_DECLARATION(void,  glFrontFace, GLFrontFaceMode);
+PROC_DECLARATION(void,  glEnable, U32);
+PROC_DECLARATION(void,  glViewport, S32, S32, U32, U32);
+
+
+
+typedef void (__stdcall *DEBUGPROC)(U32 source,
+            U32 type,
+            U32 id,
+            U32 severity,
+            U32  length,
+            const char *message,
+            const void *userParam);
+PROC_DECLARATION(void,  glDebugMessageCallback, DEBUGPROC, const void*);
 
 
 typedef HGLRC (*wglCreateContextAttribsARBProc)(HDC hDC, HGLRC hshareContext, const int *attribList);
