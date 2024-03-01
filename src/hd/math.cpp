@@ -189,6 +189,12 @@ internal vectype operator/(const vectype& vec1,
 #undef vectype
 #undef basic_binary_op
 
+
+internal Mat4F32 translate(Vec3)
+
+
+
+
 #if 0
 constexpr Vec2U8 Vec2U8_0 = {0};
 constexpr Vec2U16 Vec2U16_0 = {0};

@@ -10,6 +10,15 @@
 
 #define MATH_MUL_DIV_OPS 1
 
+template<typename type, U32 width, U32 height>
+struct base_mat {
+    type d[width*height];
+};
+
+
+typedef base_mat<F32, 4,4> Mat4F32;
+
+
 template<typename type>
 struct base_vec2 {
     union {

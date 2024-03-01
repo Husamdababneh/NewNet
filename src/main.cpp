@@ -434,6 +434,16 @@ int  main()
     HDC windowContext = GetDC(window);
 
     Item obj = init_object();
+    Vec4F32 vec = {1.0f, 0.f, 0.f, 1.f};
+    Mat4F32 transformationMat = {
+        1.f, 0.f, 0.f, 0.f,
+        0.f, 1.f, 0.f, 0.f,
+        0.f, 0.f, 1.f, 0.f,
+        0.f, 0.f, 0.f, 1.f,
+    };
+
+
+    
     U32 texture1;
     S32 uniformLocation;
     S32 scaleFactorUniform;
