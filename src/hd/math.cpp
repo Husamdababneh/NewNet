@@ -190,8 +190,91 @@ internal vectype operator/(const vectype& vec1,
 #undef basic_binary_op
 
 
-internal Mat4F32 translate(Vec3)
+internal Vec4F32 mul(const Mat4F32& mat, const Vec3F32& vec)
+{
+    return {
+        (mat.m00 * vec.x) + (mat.m01 * vec.y) + (mat.m02 * vec.z) + (mat.m03 * 0),
+        (mat.m10 * vec.x) + (mat.m11 * vec.y) + (mat.m12 * vec.z) + (mat.m13 * 0),
+        (mat.m20 * vec.x) + (mat.m21 * vec.y) + (mat.m22 * vec.z) + (mat.m23 * 0),
+        (mat.m20 * vec.x) + (mat.m21 * vec.y) + (mat.m22 * vec.z) + (mat.m23 * 0),
+    };
+}
 
+internal Vec4F32 mul(const Mat4F32& mat, const Vec4F32& vec)
+{
+    return {
+        (mat.m00 * vec.x) + (mat.m01 * vec.y) + (mat.m02 * vec.z) + (mat.m03 * vec.w),
+        (mat.m10 * vec.x) + (mat.m11 * vec.y) + (mat.m12 * vec.z) + (mat.m13 * vec.w),
+        (mat.m20 * vec.x) + (mat.m21 * vec.y) + (mat.m22 * vec.z) + (mat.m23 * vec.w),
+        (mat.m30 * vec.x) + (mat.m31 * vec.y) + (mat.m32 * vec.z) + (mat.m33 * vec.w),
+    };
+}
+
+internal Mat4F32 translate(const Mat4F32& mat, const Vec3F32& translation)
+{
+    Mat4F32 result = mat;
+    result.m03 = translation.x;
+    result.m13 = translation.y;
+    result.m23 = translation.z;
+    return result;
+}
+
+internal Mat4F32 create_ortho(const F32 left,   const F32 right,
+                              const F32 bottom, const F32 top,
+                              const F32 n,      const F32 far)
+{
+    auto rlm = right - left;
+    auto rlp = right + left;
+
+    auto tbm = bottom - top;
+    auto tbp = bottom + top;
+
+    auto fnm = far - n;
+    auto fnp = far + n;
+    
+    return {
+        2.f/rlm,     .0f,      .0f, -(rlp/rlm),
+            .0f, 2.f/tbm,      .0f, -(tbp/tbm),
+            .0f,     .0f, -2.f/fnm,   -(n/fnm),
+            .0f,     .0f,      .0f,       1.0f,
+    };
+}
+
+
+internal Mat4F32 create_ortho(const F32 width, const F32 height, const F32 depth)
+{
+    F32 w = 2.f/width;
+    F32 h = 2.f/height;
+    F32 d = 2.f/depth;
+    return {
+          w, .0f, .0f, -1.0f,
+        .0f,   h, .0f, -1.0f,
+        .0f, .0f,  -d,  1.0f,
+        .0f, .0f, .0f,  1.0f,
+    };
+}
+
+
+internal Mat4F32 create_ortho_new(const F32 left,   const F32 right,
+                                  const F32 bottom, const F32 top,  
+                                  const F32 n,      const F32 far)
+{
+    auto rlm = right - left;     
+    auto rlp = right + left;
+
+    auto tbm = bottom - top;
+    auto tbp = bottom + top;
+
+    auto fnm = far - n;
+    auto fnp = far + n;
+    
+    return {
+        2.f/rlm,     .0f,      .0f, .0f,
+        .0f, 2.f/tbm,      .0f,  .0f,
+        .0f,     .0f, -2.f/fnm,   .0f,
+        -(rlp/rlm),    -(tbp/tbm),      -(n/fnm),       1.0f,
+    };
+}
 
 
 

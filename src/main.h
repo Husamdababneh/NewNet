@@ -22,10 +22,6 @@ struct OpenGLBackend
     // For now these methods shall be here
 };
 
-struct Counter
-{
-};
-
 
 
 inline internal void print_string(const String str);

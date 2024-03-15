@@ -6,9 +6,6 @@
    $Description: 
     ========================================================================*/
 
-
-#include <signal.h>
-
 #pragma warning(disable : 4189)
 #pragma warning (disable : 4235)
 
@@ -20,6 +17,7 @@
 
 int test()
 {
+#if 0
     Initalize_LinearAllocate(&global_allocator, MB(100));
     
     LinearAllocator allocator;
@@ -60,6 +58,16 @@ int test()
     // Deallocate/free the file memory (give it back to the allocator)
     Free_LinearAllocate(&allocator);
     Free_LinearAllocate(&global_allocator);
+#endif
+
+    U64 pageMinimum = GetLargePageMinimum();
+    constexpr U64 buffer_len = KB(1);
+    const char* formatString = "Large Page Minimum: %lld";
+    buffer(buffer2, KB(1));
+    char buffer[buffer_len] = {};
+    S32 size = snprintf(buffer, buffer_len, formatString, pageMinimum);
+    String str = cstr_to_string(buffer, (U64)size);
+    print_string(str);
     ExitProcess(1);
 }
 
@@ -221,22 +229,106 @@ a . g       =  %f
     print_string(str);
 }
 
+void print_vec3(const Vec3F32& vec)
+{
+    constexpr U32 buffer_len = 256;
+    char buffer[buffer_len]  = {};
+    const char* formatString       = R"str(
+Vec3:
+    | %+ 10.6f |
+    | %+ 10.6f |
+    | %+ 10.6f |
+)str";
+    S32 size = snprintf(buffer, buffer_len, formatString,
+                        vec.x,    
+                        vec.y,
+                        vec.z );
+    
+    String str = cstr_to_string(buffer, (U64)size);
+    print_string(str);
+}
+
+
+void print_vec3(const Vec4F32& vec)
+{
+    constexpr U32 buffer_len = 256;
+    char buffer[buffer_len]  = {};
+    const char* formatString       = R"str(
+Vec4:
+    | %+ 10.6f |
+    | %+ 10.6f |
+    | %+ 10.6f |
+    | %+ 10.6f |
+)str";
+    S32 size = snprintf(buffer, buffer_len, formatString,
+                        vec.x,    
+                        vec.y,
+                        vec.z,
+                        vec.w);
+    
+    String str = cstr_to_string(buffer, (U64)size);
+    print_string(str);
+}
+
+void print_mat4x4(const Mat4F32& mat)
+{
+    constexpr U32 buffer_len = 256;
+    char buffer[buffer_len]  = {};
+    const char* formatString       = R"str(
+Mat4:
+    | %+ 10.6f %+ 10.6f %+ 10.6f %+ 10.6f |
+    | %+ 10.6f %+ 10.6f %+ 10.6f %+ 10.6f |
+    | %+ 10.6f %+ 10.6f %+ 10.6f %+ 10.6f |
+    | %+ 10.6f %+ 10.6f %+ 10.6f %+ 10.6f |
+)str";
+    S32 size = snprintf(buffer, buffer_len, formatString,
+                        mat.m00, mat.m01, mat.m02, mat.m03,    
+                        mat.m10, mat.m11, mat.m12, mat.m13,
+                        mat.m20, mat.m21, mat.m22, mat.m23,
+                        mat.m30, mat.m31, mat.m32, mat.m33 );
+    
+    String str = cstr_to_string(buffer, (U64)size);
+    print_string(str);
+}
+
 
 int RemoveCRTTest()
 {
 //    SetUnhandledExceptionFilter(&win32_exception_filter);
     AddVectoredExceptionHandler(1, ExceptionHandler);
 
-    constexpr U32 buffer_len = 256;
-    char buffer[buffer_len]  = {};
-    const char* formatString       = "%f";
 
+    Vec3F32 pos0 = { .x = 10.0f, .y = 10.0f, .z = 0.0f };
+    Vec3F32 pos1 = { .x = 10.0f, .y =  0.0f, .z = 0.0f };
+    Vec3F32 pos2 = { .x =  0.0f, .y =  0.0f, .z = 0.0f };
+    Vec3F32 pos3 = { .x =  0.0f, .y = 10.0f, .z = 0.0f };
+    
 
-    S32 size = snprintf(buffer, buffer_len, formatString,
-                        q_rsqrt(4.0f));
-    String str = cstr_to_string(buffer, (U64)size);
-    print_string(str);
-    test_vec3F32();
+    Mat4F32 ortho = create_ortho(960.0f, 540.0f, 2.0f);
+
+    print_mat4x4(ortho);
+
+    
+    auto result0 = mul(ortho, pos0);
+    auto result1 = mul(ortho, pos1);
+    auto result2 = mul(ortho, pos2);
+    auto result3 = mul(ortho, pos3);
+    
+    print_vec3(pos0);
+    print_vec3(result0);
+
+    /*
+    print_vec3(pos2);
+    print_vec3(result2);
+    */
+    /*
+    print_vec3(pos0);
+    print_vec3(result0);
+    
+    print_vec3(pos0);
+    print_vec3(result0);
+    */
+    //test_vec3F32();
     //test_vec2F32();
     return 0;
 }

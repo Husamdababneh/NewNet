@@ -8,7 +8,7 @@
 
 #include "opengl.h"
 
-#pragma warning(disable :4191)
+//#pragma warning(disable :4191)
 
 // @CleanUp(husamd): Clean this shit up
 #define LOAD_OPENG_PROC(proc)\
@@ -149,6 +149,7 @@ MessageCallback( U32 source,
     ExitProcess(0);
 }
 
+internal B8 load_uniform_procs();
 
 inline internal
 B8 LoadGLProcs()
@@ -159,8 +160,12 @@ B8 LoadGLProcs()
     LOAD_OPENG_PROC(glShaderSource);
     LOAD_OPENG_PROC(glCompileShader);
     LOAD_OPENG_PROC(glGetShaderiv);
+    LOAD_OPENG_PROC(glGetShaderInfoLog);
+    LOAD_OPENG_PROC(glGetProgramiv);
+    LOAD_OPENG_PROC(glGetProgramInfoLog);
     LOAD_OPENG_PROC(glAttachShader);
     LOAD_OPENG_PROC(glUseProgram);
+    LOAD_OPENG_PROC(glDeleteProgram);
     LOAD_OPENG_PROC(glLinkProgram);
     LOAD_OPENG_PROC(glDeleteShader);
 
@@ -170,6 +175,9 @@ B8 LoadGLProcs()
     LOAD_OPENG_PROC(glGenBuffers);
     LOAD_OPENG_PROC(glBufferData);
     LOAD_OPENG_PROC(glNamedBufferData);
+    LOAD_OPENG_PROC(glNamedBufferSubData);
+    LOAD_OPENG_PROC(glDeleteVertexArrays);
+    LOAD_OPENG_PROC(glDeleteBuffers);
 
 
     LOAD_OPENG_PROC(glBindVertexArray);
@@ -188,8 +196,7 @@ B8 LoadGLProcs()
 
 
     LOAD_OPENG_PROC(glGetUniformLocation);
-    LOAD_OPENG_PROC(glUniform1i);
-    LOAD_OPENG_PROC(glUniform1f);
+    load_uniform_procs();
     LOAD_OPENG_PROC(glDebugMessageCallback); 
     
     HMODULE lib = LoadLibraryA("opengl32.dll");
@@ -287,4 +294,43 @@ OpenGLBackend createOpenGLBackend(HWND window)
 
     //MessageBoxA(0,(char*)glGetString(GL_VERSION), "OPENGL VERSION",0);
     return backend;
+}
+
+
+internal B8 load_uniform_procs()
+{
+    LOAD_OPENG_PROC(glUniform1f);
+    LOAD_OPENG_PROC(glUniform2f);
+    LOAD_OPENG_PROC(glUniform3f);
+    LOAD_OPENG_PROC(glUniform4f);
+    LOAD_OPENG_PROC(glUniform1i);
+    LOAD_OPENG_PROC(glUniform2i);
+    LOAD_OPENG_PROC(glUniform3i);
+    LOAD_OPENG_PROC(glUniform4i);
+    LOAD_OPENG_PROC(glUniform1ui);
+    LOAD_OPENG_PROC(glUniform2ui);
+    LOAD_OPENG_PROC(glUniform3ui);
+    LOAD_OPENG_PROC(glUniform4ui);
+    LOAD_OPENG_PROC(glUniform1fv);
+    LOAD_OPENG_PROC(glUniform2fv);
+    LOAD_OPENG_PROC(glUniform3fv);
+    LOAD_OPENG_PROC(glUniform4fv);
+    LOAD_OPENG_PROC(glUniform1iv);
+    LOAD_OPENG_PROC(glUniform2iv);
+    LOAD_OPENG_PROC(glUniform3iv);
+    LOAD_OPENG_PROC(glUniform4iv);
+    LOAD_OPENG_PROC(glUniform1uiv);
+    LOAD_OPENG_PROC(glUniform2uiv);
+    LOAD_OPENG_PROC(glUniform3uiv);
+    LOAD_OPENG_PROC(glUniform4uiv);
+    LOAD_OPENG_PROC(glUniformMatrix2fv);
+    LOAD_OPENG_PROC(glUniformMatrix3fv);
+    LOAD_OPENG_PROC(glUniformMatrix4fv);
+    LOAD_OPENG_PROC(glUniformMatrix2x3fv);
+    LOAD_OPENG_PROC(glUniformMatrix3x2fv);
+    LOAD_OPENG_PROC(glUniformMatrix2x4fv);
+    LOAD_OPENG_PROC(glUniformMatrix4x2fv);
+    LOAD_OPENG_PROC(glUniformMatrix3x4fv);
+    LOAD_OPENG_PROC(glUniformMatrix4x3fv);
+    return true;
 }

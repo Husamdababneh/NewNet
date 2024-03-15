@@ -30,10 +30,15 @@
 //
 ///////////////////////////////////////////////////////////////////////////////
 
-#include <stdbool.h>
-#include <stdint.h>
 
+//#include <stdint.h>
 #include "printf.h"
+#include "hd/base_types.h"
+
+// @Cleanup(husamd):
+#if !defined(DBL_MAX)
+#define DBL_MAX          1.7976931348623158e+308 // max value
+#endif 
 
 
 // define this globally (e.g. gcc -DPRINTF_INCLUDE_CONFIG_H ...) to include the
@@ -112,12 +117,11 @@
 #define FLAGS_ADAPT_EXP (1U << 11U)
 
 
-// import float.h for DBL_MAX
+// TODO(husamd): Remove this PRINTF_SUPPORT_FLOAT
 #if defined(PRINTF_SUPPORT_FLOAT)
-#include <float.h>
 #endif
 
-
+// @Cleanup(husamd):
 #if defined(STOP_WARNINGS)
 #pragma warning(disable: 5045)
 #endif
@@ -493,7 +497,7 @@ static size_t _etoa(out_fct_type out, char* buffer, size_t idx, size_t maxlen, d
     // determine the decimal exponent
     // based on the algorithm by David Gay (https://www.ampl.com/netlib/fp/dtoa.c)
     union {
-        uint64_t U;
+        U64  U;
         double   F;
     } conv;
 
@@ -506,7 +510,7 @@ static size_t _etoa(out_fct_type out, char* buffer, size_t idx, size_t maxlen, d
     exp2 = (int)(expval * 3.321928094887362 + 0.5);
     const double z  = expval * 2.302585092994046 - exp2 * 0.6931471805599453;
     const double z2 = z * z;
-    conv.U = (uint64_t)(exp2 + 1023) << 52U;
+    conv.U = (U64)(exp2 + 1023) << 52U;
     // compute exp(z) using continued fractions, see https://en.wikipedia.org/wiki/Exponential_function#Continued_fractions_for_ex
     conv.F *= 1 + 2 * z / (2 - z + (z2 / (6 + (z2 / (10 + z2 / 14)))));
     // correct for rounding errors
@@ -696,10 +700,13 @@ static int _vsnprintf(out_fct_type out, char* buffer, const size_t maxlen, const
               format++;
               break;
 #endif
+              // TODO(husamd): Support this ?? 
+#if 0
           case 'j' :
               flags |= (sizeof(intmax_t) == sizeof(long) ? FLAGS_LONG : FLAGS_LONG_LONG);
               format++;
               break;
+#endif
           case 'z' :
               flags |= (sizeof(size_t) == sizeof(long) ? FLAGS_LONG : FLAGS_LONG_LONG);
               format++;
@@ -941,3 +948,9 @@ int fctprintf(void (*out)(char character, void* arg), void* arg, const char* for
     va_end(va);
     return ret;
 }
+
+
+// @Cleanup(husamd):
+#if defined(DBL_MAX)
+#undef DBL_MAX
+#endif 

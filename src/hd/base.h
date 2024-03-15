@@ -30,6 +30,14 @@ TODO(Husam Dababneh): Architectures
 //~ 
 // NOTE(Husam Dababneh): Some useful Macros
 
+// Casey Muratori way of differentiating between the meaning of static in different locations
+// Static Local variable
+#define local_presist static 
+// Global variable
+#define global_variable static 
+// translation-unit scope function
+#define internal static  
+
 #define stringify_literal( x ) # x
 #define stringify_expanded( x ) stringify_literal( x )
 #define stringify_with_quotes( x ) stringify_expanded( stringify_expanded( x ) )
@@ -38,19 +46,20 @@ TODO(Husam Dababneh): Architectures
 #define STRINGIZE2(x) #x
 #define LINE_STRING STRINGIZE(__LINE__)
 
-#ifdef offsetof
-#undef offsetof
-   #define offsetof(a, b) (U64)(&((a*)0)->b)
-#endif
 
-#ifdef member_size
-    #undef member_size
-    #define member_size(type, member) sizeof(((type *)0)->member) // this atually works :)
-#endif
-
+#define offsetof(a, b) (U64)(&((a*)0)->b)
+#define member_size(type, member) sizeof(((type *)0)->member)
 #define countof(x) sizeof(x) / sizeof(x[0])
 
-
+// Taken from :
+// https://github.com/EpicGamesExt/raddebugger/blob/c757388bb409e8670b63e31033e0ea0658587484/src/base/base_types.h#L163C1-L169C1
+#define Compose64Bit(a,b)  ((((U64)a) << 32) | ((U64)b));
+#define AlignPow2(x,b)     (((x) + (b) - 1)&(~((b) - 1)))
+#define AlignDownPow2(x,b) ((x)&(~((b) - 1)))
+#define AlignPadPow2(x,b)  ((0-(x)) & ((b) - 1))
+#define IsPow2(x)          ((x)!=0 && ((x)&((x)-1))==0)
+#define IsPow2OrZero(x)    ((((x) - 1)&(x)) == 0)
+ 
 
 //~ Compilers
 
@@ -169,83 +178,12 @@ TODO(Husam Dababneh): Architectures
 #error Could not detect Operating System (You may diable this error if you know what you are doing)
 #endif
 
-// we may need this in the future 
-#if 0
-template <typename F>
-struct Defer
-{
-	Defer(F f) : f(f) {}
-	~Defer() { f(); }
-	F f;
-};
-
-
-#define CONCAT0(a, b) a##b
-#define CONCAT(a, b) CONCAT0(a, b)
-#define defer(body) Defer CONCAT(defer, __LINE__)([&]() { body; })
-#endif
-
-#if COMPILER_CL == 1
-#pragma warning( disable : 4668 )
-#endif
-
-//~ Basic Types
 
 #ifdef HD_TYPES
 
-#include <stdint.h>
-
-// Fixed Width singed integers
-typedef int8_t   S8;
-typedef int16_t  S16;
-typedef int32_t  S32;
-typedef int64_t  S64;
-typedef void*    PTR;
-//typedef intptr_t PTR;
-
-// Fixed Width unsinged integers
-typedef uint8_t   U8;
-typedef uint16_t  U16;
-typedef uint32_t  U32;
-typedef uint64_t  U64;
-
-// This is actually not neccecry 
-typedef float     F32;
-typedef double    F64;
-
-// Any Value but 0 is true
-typedef uint8_t   B8;
-typedef uint16_t  B16;
-typedef uint32_t  B32;
-typedef uint64_t  B64;
-
-// Sizes
-typedef size_t Size;
-
-typedef U8  Padding8;
-typedef U16 Padding16;
-typedef U32 Padding32;
-typedef U64 Padding64;
+#include "base_types.h"
 
 
-
-#define _BYTE_ 1
-#define KB(x) (U64)(   x  * 1024)
-#define MB(x) (U64)(KB(x) * 1024)
-#define GB(x) (U64)(MB(x) * 1024)
-#define TB(x) (U64)(GB(x) * 1024)
-
-#define MIN(a,b) (((a)<(b))?(a):(b))
-#define MAX(a,b) (((a)>(b))?(a):(b))
-
-
-// Casey Muratori way of differentiating between the meaning of static in different locations
-// Static Local variable
-#define local_presist static 
-// Global variable
-#define global_variable static 
-// translation-unit scope function
-#define internal static  
 
 #endif // HD_TYPES
 

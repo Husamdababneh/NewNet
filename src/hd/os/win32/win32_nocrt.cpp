@@ -94,7 +94,17 @@ size_t __chkstk (size_t stackSpaceSize)
 
 void print_procedure_info(PVOID procedureAddress)
 {
-    HANDLE hProcess = GetCurrentProcess();
+
+    BOOL isDebuggerAttached = IsDebuggerPresent();
+    HANDLE hProcess = 0;
+    if (!isDebuggerAttached)
+    {
+        hProcess = GetCurrentProcess();
+    }else
+    {
+        print_string("There is a debugger attached to this process "_s);
+        ExitProcess(1);
+    }
     SymInitialize(hProcess, NULL, TRUE);
 
     DWORD64  dwDisplacement = 0;
@@ -155,12 +165,17 @@ LONG WINAPI ExceptionHandler(PEXCEPTION_POINTERS info)
         print_string(s);
         // TODO: more info where this happens and if we can debug it
         constexpr auto FLAG = EXCEPTION_NONCONTINUABLE;
+        if (nullptr == er->ExceptionAddress)
+        {
+            print_string("Calling Unloaded Procedure, Exiting Program"_s);
+            ExitProcess(1);
+        }
         print_procedure_info(er->ExceptionAddress);
         if (er->ExceptionFlags & FLAG)
         {
             print_string("Exiting Program"_s);
         }
-        UnhandledExceptionFilter(info);
+        //UnhandledExceptionFilter(info);
         ExitProcess(1);
         //return EXCEPTION_CONTINUE_SEARCH ;        
     }

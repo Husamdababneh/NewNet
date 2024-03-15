@@ -6,11 +6,12 @@
    $Description: Entry point
    ========================================================================*/
 
-
+#include "main.h"
+#include "gfx/opengl.cpp"
+#include "hd/image.cpp"
 
 global_variable B8 running = true;
 global_variable OpenGLBackend backEnd = {};
-
 struct Win32_OffscreenBuffer {
     BITMAPINFO info;
     char       padding[4];
@@ -26,6 +27,9 @@ struct WindowDimentions
 };
 
 global_variable Win32_OffscreenBuffer offscreenBuffer;
+
+B32 checkShaderProgramStatus(GLShaderProgram program, GLShaderProgramQueryParam param);
+B32 checkShaderStatus(GLShaderId shader, GLShaderQueryParam param);
 
 BOOL ctrl_handler(DWORD event)
 {
@@ -71,7 +75,7 @@ WindowDimentions win32_get_window_dimentions(HWND window)
 {
     WindowDimentions result = {};
     RECT windowRect;
-    GetWindowRect(window,&windowRect);
+    GetWindowRect(window, &windowRect);
     
     result.width  = (U64)windowRect.right  - (U64)windowRect.left;
     result.height = (U64)windowRect.bottom - (U64)windowRect.top;
@@ -79,83 +83,6 @@ WindowDimentions win32_get_window_dimentions(HWND window)
     return result;
 }
 
-inline internal
-void update_offscreen_buffer(HWND window, Win32_OffscreenBuffer* buffer)
-{
-    WindowDimentions dimentions = win32_get_window_dimentions(window);
-    
-    if (buffer->memory)
-    {
-        // TODO(Husam): Check the return of this;
-        BOOL result = VirtualFree(buffer->memory, 0, MEM_RELEASE);
-        (result);
-    }
-    
-    buffer->width        = dimentions.width;
-    buffer->height       = dimentions.height;
-    buffer->bytePerPixel = 4;
-
-    buffer->info.bmiHeader = {};
-    buffer->info.bmiHeader.biSize        =  sizeof(buffer->info.bmiHeader);
-    buffer->info.bmiHeader.biWidth       =  (LONG)buffer->width;
-    buffer->info.bmiHeader.biHeight      = -(LONG)buffer->height;
-    buffer->info.bmiHeader.biPlanes      =  1;
-    buffer->info.bmiHeader.biBitCount    =  32;
-    buffer->info.bmiHeader.biCompression =  BI_RGB;
-
-
-    U64 bitMapMemorySize = buffer->width * buffer->height * buffer->bytePerPixel;
-
-    
-    buffer->memory = VirtualAlloc(0, bitMapMemorySize, MEM_COMMIT, PAGE_READWRITE);
-
-    if(!buffer->memory)
-    {
-        print_string("Could not allocate memory for some reason\n"_s);
-        ExitProcess(0);
-    }
-
-    U64 pitch = buffer->width * buffer->bytePerPixel;
-    U8* pointer = (U8*)buffer->memory;
-    
-    for(U32 y = 0; y < buffer->height; y++)
-    {
-        U32* pixel = (U32*) pointer;
-        for(U32 x = 0; x < buffer->width; x++)
-        {
-            pixel[x] = (U32)(y << 8 | x);
-                //0x00FFCCFF;//(U32)((y << 8) | x);
-        }
-        pointer += pitch;
-    }
-}
-
-
-
-inline 
-internal
-void render(HWND window, Win32_OffscreenBuffer* buffer)
-{
-    HDC windowContext = GetDC(window);
-    
-    int result =  StretchDIBits(windowContext,
-                                0,                   // x dest
-                                0,                   // y dest
-                                (int)buffer->width,  // width dest
-                                (int)buffer->height, // height dest
-                                0,                   // x src     
-                                0,                   // y src     
-                                (int)buffer->width,  // width src 
-                                (int)buffer->height, // height src
-                                buffer->memory, 
-                                &buffer->info,  
-                                DIB_RGB_COLORS,
-                                SRCCOPY);
-
-    
-    
-    (result);
-}
 
 
 
@@ -193,11 +120,7 @@ MainWindowCallback(HWND   hWindow,
       } break;
       case WM_PAINT:
       {
-          //update_offscreen_buffer(hWindow, &offscreenBuffer);         
-          //render(hWindow, &offscreenBuffer);
           result = DefWindowProc(hWindow, message, wParam, lParam);
-          //(handled);
-          //handled = true;
       } break;
       case WM_SIZE:
       {
@@ -251,30 +174,205 @@ void title_fps_counter(
 }
 
 const char *vertexShaderSource = R"str(
-    #version 330 core
+    #version 430 core
     layout (location = 0) in vec3 aPos;
     layout (location = 1) in vec2 uv;
+
+    layout(location = 0) uniform mat4 proj;
+    layout(location = 1) uniform mat4 view;
+
     void main()
     {
-       gl_Position = vec4(aPos.xyz, 1.0);
+       gl_Position = proj*vec4(aPos.xyz, 1.0);
     }
 )str";
 
 const char *fragmentShaderSource = R"str(
-    #version 330 core
+    #version 430 core
     out vec4 FragColor;
     void main()
     {
-       FragColor = vec4(1.0f, 0.0f, 0.94f, 1.0f);
+       FragColor = vec4(.5f, 0.336f, 0.25f, 1.0f);
     }
 )str";
 
 
 struct Item
 {
-    U32 vbo, ebo, vao;
-    U32 shaderProgram;
+    GLBufferId vbo, ebo;
+    GLVertexArray vao;
+    GLShaderProgram shaderProgram;
 };
+
+struct GLGuiData
+{
+    Arena* vertices;
+    U64 vertices_count;
+    
+    Arena* indices;
+    U64 indices_count;
+
+    U64 rect_count;
+};
+
+struct GLGui
+{
+    GLGuiData data;
+
+    GLBufferId vbo, ebo;
+    GLVertexArray vao;
+    GLShaderProgram shaderProgram;
+};
+
+GLGui init_gl_gui()
+{
+    constexpr U64 MAX_VERTICIES_COUNT = 2000;
+    constexpr U64 VERTICIES_ARRAY_SIZE = 2000 * BYTE(80);
+    constexpr U64 INDECIES_ARRAY_SIZE = 2000 * BYTE(80);
+    // Each rect needs an 80 F32 as vertex data
+    // Each rect needs an 24 U32 as index data
+
+    GLGui gui;
+    gui.data.vertices = arena_alloc__sized(VERTICIES_ARRAY_SIZE, VERTICIES_ARRAY_SIZE);
+    gui.data.vertices_count = 0;
+
+    gui.data.indices = arena_alloc__sized(INDECIES_ARRAY_SIZE, INDECIES_ARRAY_SIZE);
+    gui.data.indices_count = 0;    
+
+    gui.data.rect_count = 0;
+
+    glGenVertexArrays(1, &gui.vao);
+    glGenBuffers(1, &gui.vbo);
+    glGenBuffers(1, &gui.ebo);
+
+    glBindVertexArray(gui.vao);
+
+    glBindBuffer(GL_ARRAY_BUFFER, gui.vbo);
+    glNamedBufferData(gui.vbo, VERTICIES_ARRAY_SIZE, NULL, GLBufferUsage::GL_DYNAMIC_DRAW);
+    
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gui.ebo);
+    glNamedBufferData(gui.ebo, INDECIES_ARRAY_SIZE, NULL, GLBufferUsage::GL_DYNAMIC_DRAW);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(F32), (void*)0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(F32), (void*)(3 * sizeof(F32)));
+    glEnableVertexAttribArray(1);
+
+        // Shaders
+
+    // vertex shader
+    auto vertexShader = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vertexShader, 1, (const S8**)&vertexShaderSource, NULL);
+    glCompileShader(vertexShader);
+
+    auto result = checkShaderStatus(vertexShader, GLShaderQueryParam::GL_COMPILE_STATUS);
+    if (result == GL_FALSE){
+        ExitProcess(1);
+    }
+    // fragment shader
+    auto fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fragmentShader, 1, (const S8**)&fragmentShaderSource, NULL);
+    glCompileShader(fragmentShader);
+    result = checkShaderStatus(fragmentShader, GLShaderQueryParam::GL_COMPILE_STATUS);
+
+    
+    gui.shaderProgram  = glCreateProgram();
+    glAttachShader(gui.shaderProgram, vertexShader);
+    glAttachShader(gui.shaderProgram, fragmentShader);
+    glLinkProgram(gui.shaderProgram);
+    result = checkShaderProgramStatus(gui.shaderProgram, GLShaderProgramQueryParam::GL_LINK_STATUS);
+    
+    if (result == false)
+    {
+        ExitProcess(1);
+    }
+    
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);
+
+    
+    return gui;
+};
+
+void push_rect(GLGui* gui, F32 w, F32 h, F32 x, F32 y)
+{
+    F32 vertices[] = {
+          x,   y+h, 0.0f, 1.0f, 0.0f,  // top left 
+        x+w,   y+h, 0.0f, 1.0f, 1.0f,  // top right
+        x+w,     y, 0.0f, 1.0f, 0.0f,  // bottom right
+          x,     y, 0.0f, 1.0f, 0.0f,  // bottom left
+    };
+
+    constexpr U64 vertices_count = countof(vertices);
+    
+    F32* v_mem = push_array_no_zero(gui->data.vertices, F32, vertices_count);
+    memcpy(v_mem, vertices, vertices_count * sizeof(F32));
+    gui->data.vertices_count += vertices_count;
+    
+    const U32 i = gui->data.rect_count * 4;
+    // SIMD?
+    U32 indices[] = {  // note that we start from 0!
+        0 + i, 1 + i, 2 + i,   // first triangle
+        2 + i, 3 + i, 0 + i    // second triangle
+    };
+    constexpr U64 indices_count = countof(indices);
+
+    U32* idx_mem = push_array_no_zero(gui->data.indices, U32, indices_count);
+    memcpy(idx_mem, indices, indices_count * sizeof(U32));
+    gui->data.indices_count += indices_count;
+
+
+    // Update the VBO and IBO data
+    const U64 v_idx = gui->data.rect_count * sizeof(vertices);
+    const U64 i_idx = gui->data.rect_count * sizeof(indices);
+    glNamedBufferSubData(gui->vbo, v_idx, sizeof(vertices), v_mem);
+    glNamedBufferSubData(gui->ebo, i_idx, sizeof(indices), idx_mem);
+
+    gui->data.rect_count += 1;
+    
+};
+
+
+B32 checkShaderStatus(GLShaderId shader, GLShaderQueryParam param)
+{
+    S32 success;
+    glGetShaderiv(shader, param, &success);
+
+    if (GL_TRUE == success)
+    {
+        return true;
+    }
+
+    constexpr U32 buffer_len = 256;
+    U32 length;
+    U8 buffer[buffer_len] = {};
+    glGetShaderInfoLog(shader, buffer_len, &length, buffer);
+
+    String str = cstr_to_string((char*)buffer, (U64)length);
+    print_string(str);
+    return false;
+}
+
+B32 checkShaderProgramStatus(GLShaderProgram program, GLShaderProgramQueryParam param)
+{
+    S32 success;
+    glGetProgramiv(program, param, &success);
+
+    if (success == GL_TRUE)
+    {
+        return true;
+    }
+
+    constexpr U32 buffer_len = 256;
+    U32 length;
+    U8 buffer[buffer_len] = {};
+    glGetProgramInfoLog(program, buffer_len, &length, buffer);
+
+    String str = cstr_to_string((char*)buffer, (U64)length);
+    print_string(str);
+    return false;
+}
+
 
 //inline
 #pragma auto_inline(off)
@@ -282,6 +380,7 @@ internal
 Item init_object()
 {
     Item obj = {};
+
     /*
     F32 vertices[] = {
          0.5f,  0.5f, 0.0f, 1.0f, 1.0f,  // top right
@@ -292,17 +391,17 @@ Item init_object()
     */
 
     F32 vertices[] = {
-          0.5f,  0.5f, 0.0f, 1.0f, 1.0f, // top right
-          0.5f, -0.5f, 0.0f, 1.0f, 0.0f,  // bottom right
-         -0.5f, -0.5f, 0.0f, 1.0f, 0.0f,  // bottom left
-         -0.5f,  0.5f, 0.0f, 1.0f, 0.0f   // top left 
+             0.f, 100.f, 0.0f, 1.0f, 0.0f,  // top left 
+           100.f, 100.f, 0.0f, 1.0f, 1.0f,  // top right
+           100.f,   0.f, 0.0f, 1.0f, 0.0f,  // bottom right
+             0.f,   0.f, 0.0f, 1.0f, 0.0f,  // bottom left
     };
 
 
     
     U32 indices[] = {  // note that we start from 0!
-        0, 1, 3,   // first triangle
-        1, 2, 3    // second triangle
+        0, 1, 2,   // first triangle
+        2, 3, 0    // second triangle
     };
 
 
@@ -316,18 +415,16 @@ Item init_object()
     glBindVertexArray(obj.vao);
 
     glBindBuffer(GL_ARRAY_BUFFER, obj.vbo);
-    glNamedBufferData(obj.vbo, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    glNamedBufferData(obj.vbo, sizeof(vertices), vertices, GLBufferUsage::GL_STATIC_DRAW);
     
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, obj.ebo);
-    glNamedBufferData(obj.ebo, sizeof(indices), indices, GL_STATIC_DRAW);
+    glNamedBufferData(obj.ebo, sizeof(indices), indices, GLBufferUsage::GL_STATIC_DRAW);
     
     // We don't have glNamedVertexAttribPointer so we need to bind it before using it 
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(F32), (void*)0);
     glEnableVertexAttribArray(0);
-    //glEnableVertexArrayAttrib(obj.vao, 0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(F32), (void*)(3 * sizeof(F32)));
     glEnableVertexAttribArray(1);
-    //glEnableVertexArrayAttrib(obj.vao, 1);
 
 
     // Shaders
@@ -337,19 +434,31 @@ Item init_object()
     glShaderSource(vertexShader, 1, (const S8**)&vertexShaderSource, NULL);
     glCompileShader(vertexShader);
 
-
+    auto result = checkShaderStatus(vertexShader, GLShaderQueryParam::GL_COMPILE_STATUS);
+    if (result == GL_FALSE){
+        ExitProcess(1);
+    }
     // fragment shader
     auto fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
     glShaderSource(fragmentShader, 1, (const S8**)&fragmentShaderSource, NULL);
     glCompileShader(fragmentShader);
+    result = checkShaderStatus(fragmentShader, GLShaderQueryParam::GL_COMPILE_STATUS);
+
     
     obj.shaderProgram  = glCreateProgram();
     glAttachShader(obj.shaderProgram, vertexShader);
     glAttachShader(obj.shaderProgram, fragmentShader);
     glLinkProgram(obj.shaderProgram);
-
+    result = checkShaderProgramStatus(obj.shaderProgram, GLShaderProgramQueryParam::GL_LINK_STATUS);
+    
+    if (result == false)
+    {
+        ExitProcess(1);
+    }
+    
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
+
     
     return obj;
 }
@@ -357,12 +466,12 @@ Item init_object()
 
 void free_buffers(Item obj)
 {
-    /*
-      glDeleteVertexArrays(obj.vao);
-      glDeleteBuffers(obj.vbo);
-      glDeleteBuffers(obj.ebo);
-      glDeleteProgram(obj.shaderProgram);
-    */
+    glDeleteProgram(obj.shaderProgram);
+    
+    glDeleteBuffers(1, &obj.vbo);
+    glDeleteBuffers(1, &obj.ebo);
+    glDeleteVertexArrays(1, &obj.vao);
+      
 }
 
 
@@ -376,6 +485,12 @@ U32 compute_requested_memory_size(PNG_FILE* image)
 
 int  main()
 {
+    Arena* frame_arena;
+    global_arena = arena_alloc__sized(MB(256), KB(64));
+    frame_arena  =  arena_alloc__sized(MB(16), KB(8));
+    
+    AddVectoredExceptionHandler(1, ExceptionHandler);
+    
     HMODULE instance = GetModuleHandleA(0);
     LPSTR commandLineArguments = GetCommandLineA();
     InializeWin32Console();
@@ -401,8 +516,8 @@ int  main()
                                   WS_OVERLAPPEDWINDOW | WS_VISIBLE,
                                   CW_USEDEFAULT,
                                   CW_USEDEFAULT,
-                                  CW_USEDEFAULT,
-                                  CW_USEDEFAULT,
+                                  1920/2, //CW_USEDEFAULT,
+                                  1080/2, //CW_USEDEFAULT,
                                   0,
                                   0,
                                   instance,
@@ -423,30 +538,105 @@ int  main()
     WindowDimentions dimentions = win32_get_window_dimentions(window);
     glViewport(0, 0, dimentions.width, dimentions.height);
     // TODO: Treat this as a scratch buffer 
-    LinearAllocator allocator;
-    Initalize_LinearAllocate(&allocator, MB(1));
-
-    
-    LARGE_INTEGER start_counter, frequency; //, end_counter, counts, fps, ms;
+        
+    LARGE_INTEGER start_counter, frequency;
     
     QueryPerformanceCounter(&start_counter);
     QueryPerformanceFrequency(&frequency);
     HDC windowContext = GetDC(window);
-
+    
     Item obj = init_object();
-    Vec4F32 vec = {1.0f, 0.f, 0.f, 1.f};
-    Mat4F32 transformationMat = {
-        1.f, 0.f, 0.f, 0.f,
-        0.f, 1.f, 0.f, 0.f,
-        0.f, 0.f, 1.f, 0.f,
-        0.f, 0.f, 0.f, 1.f,
+    Mat4F32 proj = create_ortho_new(0.0f, dimentions.width,
+                                    dimentions.height, 0.0f,
+                                    -1.0f, 1.0f);
+    Mat4F32 view =  {
+        .m00 = 1.f,
+        .m11 = 1.f,
+        .m22 = 1.f,
+        .m33 = 1.f,
     };
 
-
+    //view = translate(view, {0.f, 0.f, 0.f});
+    
+    (view);
     
     U32 texture1;
     S32 uniformLocation;
-    S32 scaleFactorUniform;
+    S32 projMatrixLocation = glGetUniformLocation(obj.shaderProgram, "proj");
+    S32 viewMatrixLocation = glGetUniformLocation(obj.shaderProgram, "view");
+    //glFrontFace(GL_CW);
+
+    GLGui gui = init_gl_gui();
+    push_rect(&gui, 100.f, 100.f, 200.f, 200.f);
+    push_rect(&gui, 200.f, 200.f, 0.f, 0.f);
+    
+    while(running)
+    {
+        MSG message;
+        while(PeekMessageA(&message, window, 0, 0, PM_REMOVE))
+        {
+            if (message.message == WM_QUIT) {
+                running = false;
+                break;
+            }
+            TranslateMessage(&message); 
+            DispatchMessage(&message);
+        }
+
+        //title_fps_counter(window, start_counter, frequency);
+
+        //render(window, &offscreenBuffer);
+        glClearColor(0.5f, 0.8f, 0.5f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        //glActiveTexture(GL_TEXTURE0);
+        //glBindTexture(GL_TEXTURE_2D, texture1);
+
+        // seeing as we only have a single VAO there's no need to bind it every time,
+        // but we'll do so to keep things a bit more organized
+        /*
+        glBindVertexArray(obj.vao);
+        glUseProgram(obj.shaderProgram);
+        glUniformMatrix4fv(projMatrixLocation, 1, false, &proj.m00);
+        glUniformMatrix4fv(viewMatrixLocation, 1, false, &view.m00);
+        
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr); */
+
+        glBindVertexArray(gui.vao);
+        glUseProgram(gui.shaderProgram);
+        glUniformMatrix4fv(projMatrixLocation, 1, false, &proj.m00);
+        glUniformMatrix4fv(viewMatrixLocation, 1, false, &view.m00);
+        
+        glDrawElements(GL_TRIANGLES, gui.data.indices_count, GL_UNSIGNED_INT, nullptr);
+        
+        
+        SwapBuffers(windowContext);
+        arena_clear(frame_arena);
+    }
+    
+    // delete our buffers
+    free_buffers(obj);
+
+    
+    // NOTE(husamd): I wish defer is a thing in c/c++
+    {
+        
+        // Unnecessary; wglDeleteContext will make the context not current
+        //wglMakeCurrent(backEnd.context, NULL);
+
+        wglDeleteContext(backEnd.context);
+        PostQuitMessage(0);
+    }
+
+    DestroyWindow(window);
+    FreeConsole();
+
+    arena_release(global_arena);
+    arena_release(frame_arena);
+    ExitProcess(0);
+}
+
+
 #if 0
     {
         glGenTextures(1, &texture1);
@@ -522,63 +712,3 @@ int  main()
         glUniform1f(scaleFactorUniform, 1.5);
     }
 #endif
-
-    //scaleFactorUniform = glGetUniformLocation(obj.shaderProgram, "scaleFactor");
-
-    //glFrontFace(GL_CW);
-    
-    while(running)
-    {
-        MSG message;
-        while(PeekMessageA(&message, window, 0, 0, PM_REMOVE))
-        {
-            if (message.message == WM_QUIT) {
-                running = false;
-                break;
-            }
-            TranslateMessage(&message); 
-            DispatchMessage(&message);
-        }
-
-        //title_fps_counter(window, start_counter, frequency);
-
-        //render(window, &offscreenBuffer);
-        glClearColor(0.8f, 0.8f, 0.5f, 1.0f);
-        //glClearColor(1.f, 0.0f, 0.94f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-
-        
-        //glActiveTexture(GL_TEXTURE0);
-        //glBindTexture(GL_TEXTURE_2D, texture1);
-
-        // seeing as we only have a single VAO there's no need to bind it every time,
-        // but we'll do so to keep things a bit more organized
-        glBindVertexArray(obj.vao);
-        glUseProgram(obj.shaderProgram);
-        //glUniform1f(scaleFactorUniform, 0.5);
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
-        
-        
-        SwapBuffers(windowContext );
-    }
-    
-    // delete our buffers
-    free_buffers(obj);
-
-    
-    // NOTE(husamd): I wish defer is a thing in c/c++
-    {
-        
-        // Unnecessary; wglDeleteContext will make the context not current
-        //wglMakeCurrent(backEnd.context, NULL);
-
-        wglDeleteContext(backEnd.context);
-        PostQuitMessage(0);
-    }
-    Free_LinearAllocate(&allocator);           
-    DestroyWindow(window);
-    FreeConsole();
-    ExitProcess(0);
-}
-
-

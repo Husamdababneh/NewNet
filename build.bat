@@ -4,6 +4,18 @@ REM Compile Here
 
 SETLOCAL
 set MODE=%1
+set entryProc=%2
+
+if not '%entryProc%'=='' goto defaultProc
+set entryProc=main
+:defaultProc
+
+if not '%MODE%'=='' goto defaultMode
+set MODE=debug
+:defaultMode
+
+rem @TODO(husamd): do something with MODE
+
 
 set bin_int=.\bin-int\debug
 
@@ -17,7 +29,7 @@ REM COMPILER OPTIONS START
 rem -Gs1048576
 rem It would be nice if i can implement __chkstk, but it seems that I cannot
 rem in anycase, -Gs1048576 should equal the stack range, so unless we use 10mb of stack memory the __chkstk procedure should not be called anyways -husamd
-set common_flags=-F1048576 -Zi -FC -Gz -GS- -nologo  -diagnostics:caret -std:c++20
+set common_flags=-F1048576 -Zi -FC -Gz -GS- -nologo -diagnostics:caret -std:c++20 -DNO_CRT
 set common_flags=%common_flags% -Gs2147483647
 rem -Gs1048576
 rem -Wall
@@ -36,8 +48,8 @@ set INCLUDE_PATHS=/I./src/
 set source_files=.\src\first.cpp
 set object_files=.\first.obj .\asm.obj
 
-
-set entryProc=main
+rem if %entryProc% == 
+rem set entryProc=main
 rem set entryProc=RemoveCRTTest
 rem RemoveCRTTest
 
@@ -46,9 +58,10 @@ set LIBS=opengl32.lib Gdi32.lib User32.lib Kernel32.lib Dbghelp.lib
 set msvc_common_link_opts=/SUBSYSTEM:CONSOLE %LIBS% /ENTRY:%entryProc%
 
 REM compile main
-echo Compiling With entry point %entryProc%
-ml64 /Fo bin-int/debug/asm.obj /c src/win32_asm.masm  -Zi -nologo
-cl /c  %INCLUDE_PATHS% %flags% %source_files% %outputs%
+echo Compiling With entry point %entryProc% and %MODE% mode
+ml64 /nologo -Zi /Fo bin-int/debug/asm.obj /c src/hd/os/win32/win32_asm.masm
+rem /showIncludes
+cl  /c  %INCLUDE_PATHS% %flags% %source_files% %outputs%
 IF ERRORLEVEL 1 GOTO errorHandling
 
 REM LINK 

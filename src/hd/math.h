@@ -12,11 +12,26 @@
 
 template<typename type, U32 width, U32 height>
 struct base_mat {
-    type d[width*height];
+    type m[width*height];     
 };
 
 
-typedef base_mat<F32, 4,4> Mat4F32;
+template<typename type>
+struct base_mat4x4 {
+    union {
+        base_mat<type, 4, 4> m;
+        struct {
+            type m00, m01, m02, m03,
+                m10, m11, m12, m13,
+                m20, m21, m22, m23,
+                m30, m31, m32, m33;
+        };
+    };
+};
+
+
+
+typedef base_mat4x4<F32> Mat4F32;
 
 
 template<typename type>
