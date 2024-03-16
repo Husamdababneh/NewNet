@@ -176,6 +176,8 @@ B8 LoadGLProcs()
     LOAD_OPENG_PROC(glBufferData);
     LOAD_OPENG_PROC(glNamedBufferData);
     LOAD_OPENG_PROC(glNamedBufferSubData);
+    LOAD_OPENG_PROC(glGetNamedBufferSubData);
+    
     LOAD_OPENG_PROC(glDeleteVertexArrays);
     LOAD_OPENG_PROC(glDeleteBuffers);
 

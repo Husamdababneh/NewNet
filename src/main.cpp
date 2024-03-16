@@ -10,6 +10,8 @@
 #include "gfx/opengl.cpp"
 #include "hd/image.cpp"
 
+#include <immintrin.h>
+
 global_variable B8 running = true;
 global_variable OpenGLBackend backEnd = {};
 struct Win32_OffscreenBuffer {
@@ -176,6 +178,19 @@ void title_fps_counter(
 const char *vertexShaderSource = R"str(
     #version 430 core
     layout (location = 0) in vec3 aPos;
+
+    layout(location = 0) uniform mat4 proj;
+    layout(location = 1) uniform mat4 view;
+
+    void main()
+    {
+       gl_Position = proj*vec4(aPos.xyz, 1.0);
+    }
+)str";
+
+const char *vertexShaderSource2 = R"str(
+    #version 430 core
+    layout (location = 0) in vec3 aPos;
     layout (location = 1) in vec2 uv;
 
     layout(location = 0) uniform mat4 proj;
@@ -204,42 +219,20 @@ struct Item
     GLShaderProgram shaderProgram;
 };
 
-struct GLGuiData
-{
-    Arena* vertices;
-    U64 vertices_count;
-    
-    Arena* indices;
-    U64 indices_count;
+#include "gfx/ui.h"
 
-    U64 rect_count;
-};
-
-struct GLGui
-{
-    GLGuiData data;
-
-    GLBufferId vbo, ebo;
-    GLVertexArray vao;
-    GLShaderProgram shaderProgram;
-};
+#define FORI(x) for (U64 i = 0; i < x; ++i)
 
 GLGui init_gl_gui()
 {
-    constexpr U64 MAX_VERTICIES_COUNT = 2000;
-    constexpr U64 VERTICIES_ARRAY_SIZE = 2000 * BYTE(80);
-    constexpr U64 INDECIES_ARRAY_SIZE = 2000 * BYTE(80);
-    // Each rect needs an 80 F32 as vertex data
-    // Each rect needs an 24 U32 as index data
-
-    GLGui gui;
-    gui.data.vertices = arena_alloc__sized(VERTICIES_ARRAY_SIZE, VERTICIES_ARRAY_SIZE);
-    gui.data.vertices_count = 0;
-
-    gui.data.indices = arena_alloc__sized(INDECIES_ARRAY_SIZE, INDECIES_ARRAY_SIZE);
-    gui.data.indices_count = 0;    
-
+    constexpr U64 MAX_RECT_COUNT       = 2000;
+    constexpr U64 VERTICIES_ARRAY_SIZE = sizeof(F32) * 3 * 4 * MAX_RECT_COUNT;// 5 comps, 4 vetecies, 2000 RECT
+    constexpr U64 INDECIES_ARRAY_SIZE  = sizeof(U32) * 3 * 2 * MAX_RECT_COUNT;// 3 comp,  2 faces, 2000 RECT
+    constexpr U64 RECT_SIZE            = sizeof(BackEndRect);
+    constexpr U64 MEMORY_NEEDED        = RECT_SIZE * MAX_RECT_COUNT;
+    GLGui gui;  
     gui.data.rect_count = 0;
+    gui.data.rects      = arena_alloc__sized(MEMORY_NEEDED, MEMORY_NEEDED);
 
     glGenVertexArrays(1, &gui.vao);
     glGenBuffers(1, &gui.vbo);
@@ -253,13 +246,31 @@ GLGui init_gl_gui()
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gui.ebo);
     glNamedBufferData(gui.ebo, INDECIES_ARRAY_SIZE, NULL, GLBufferUsage::GL_DYNAMIC_DRAW);
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(F32), (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(F32), (void*)0);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(F32), (void*)(3 * sizeof(F32)));
-    glEnableVertexAttribArray(1);
+    
+    /*
+      glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(F32), (void*)(3 * sizeof(F32)));
+      glEnableVertexAttribArray(1);
+    */
 
-        // Shaders
-
+    // I can fill all the indecies data from the start since they will follow the same pattern no matter what
+    // @Cleanup(husamd): Genereate the following data on the GPU using a compute shader
+    {
+        U32 tempIndecies[MAX_RECT_COUNT * 6];
+        for (U64 i = 0, u = 0, r=0; r < MAX_RECT_COUNT; u += 4, i += 6, ++r)
+        {
+            tempIndecies[i + 0] = 0 + u;
+            tempIndecies[i + 1] = 1 + u;
+            tempIndecies[i + 2] = 2 + u;
+            tempIndecies[i + 3] = 2 + u;
+            tempIndecies[i + 4] = 3 + u;
+            tempIndecies[i + 5] = 0 + u;
+        }
+        glNamedBufferSubData(gui.ebo, 0, INDECIES_ARRAY_SIZE, tempIndecies);
+    }
+    
+    // Shaders
     // vertex shader
     auto vertexShader = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vertexShader, 1, (const S8**)&vertexShaderSource, NULL);
@@ -296,40 +307,44 @@ GLGui init_gl_gui()
 
 void push_rect(GLGui* gui, F32 w, F32 h, F32 x, F32 y)
 {
-    F32 vertices[] = {
-          x,   y+h, 0.0f, 1.0f, 0.0f,  // top left 
-        x+w,   y+h, 0.0f, 1.0f, 1.0f,  // top right
-        x+w,     y, 0.0f, 1.0f, 0.0f,  // bottom right
-          x,     y, 0.0f, 1.0f, 0.0f,  // bottom left
-    };
+    // @NOTE(husamd): In fact i do not need to save the data of the verticies on the cpu-ram
+    //                I can get the data if i want using glGetNamedBufferSubData
 
-    constexpr U64 vertices_count = countof(vertices);
+    F32 vertices[] = {
+          x,   y+h, 0.0f, // top left 
+        x+w,   y+h, 0.0f, // top right
+        x+w,     y, 0.0f, // bottom right
+          x,     y, 0.0f, // bottom left
+    };
     
-    F32* v_mem = push_array_no_zero(gui->data.vertices, F32, vertices_count);
-    memcpy(v_mem, vertices, vertices_count * sizeof(F32));
-    gui->data.vertices_count += vertices_count;
+    constexpr U64 vertices_count = countof(vertices);
+    //gui->data.vertices_count += vertices_count;
     
     const U32 i = gui->data.rect_count * 4;
+
     // SIMD?
+    /*
     U32 indices[] = {  // note that we start from 0!
         0 + i, 1 + i, 2 + i,   // first triangle
         2 + i, 3 + i, 0 + i    // second triangle
     };
-    constexpr U64 indices_count = countof(indices);
+    */   
+    //constexpr U64 indices_count = 6;//countof(indices);
 
-    U32* idx_mem = push_array_no_zero(gui->data.indices, U32, indices_count);
-    memcpy(idx_mem, indices, indices_count * sizeof(U32));
-    gui->data.indices_count += indices_count;
-
+    //gui->data.indices_count += indices_count;
 
     // Update the VBO and IBO data
     const U64 v_idx = gui->data.rect_count * sizeof(vertices);
-    const U64 i_idx = gui->data.rect_count * sizeof(indices);
-    glNamedBufferSubData(gui->vbo, v_idx, sizeof(vertices), v_mem);
-    glNamedBufferSubData(gui->ebo, i_idx, sizeof(indices), idx_mem);
+    //const U64 i_idx = gui->data.rect_count * sizeof(indices);
+    
+    glNamedBufferSubData(gui->vbo, v_idx, sizeof(vertices), vertices);
+
+    
+    // glNamedBufferSubData(gui->ebo, i_idx, sizeof(indices), indices);
 
     gui->data.rect_count += 1;
-    
+
+    //gui
 };
 
 
@@ -545,7 +560,7 @@ int  main()
     QueryPerformanceFrequency(&frequency);
     HDC windowContext = GetDC(window);
     
-    Item obj = init_object();
+    //Item obj = init_object();
     Mat4F32 proj = create_ortho_new(0.0f, dimentions.width,
                                     dimentions.height, 0.0f,
                                     -1.0f, 1.0f);
@@ -562,13 +577,15 @@ int  main()
     
     U32 texture1;
     S32 uniformLocation;
-    S32 projMatrixLocation = glGetUniformLocation(obj.shaderProgram, "proj");
-    S32 viewMatrixLocation = glGetUniformLocation(obj.shaderProgram, "view");
     //glFrontFace(GL_CW);
 
     GLGui gui = init_gl_gui();
     push_rect(&gui, 100.f, 100.f, 200.f, 200.f);
     push_rect(&gui, 200.f, 200.f, 0.f, 0.f);
+    push_rect(&gui, 200.f, 200.f, 300.f, 300.f);
+    
+    S32 projMatrixLocation = glGetUniformLocation(gui.shaderProgram, "proj");
+    S32 viewMatrixLocation = glGetUniformLocation(gui.shaderProgram, "view");
     
     while(running)
     {
@@ -607,7 +624,7 @@ int  main()
         glUniformMatrix4fv(projMatrixLocation, 1, false, &proj.m00);
         glUniformMatrix4fv(viewMatrixLocation, 1, false, &view.m00);
         
-        glDrawElements(GL_TRIANGLES, gui.data.indices_count, GL_UNSIGNED_INT, nullptr);
+        glDrawElements(GL_TRIANGLES, 6*gui.data.rect_count, GL_UNSIGNED_INT, nullptr);
         
         
         SwapBuffers(windowContext);
@@ -615,7 +632,7 @@ int  main()
     }
     
     // delete our buffers
-    free_buffers(obj);
+    //free_buffers(obj);
 
     
     // NOTE(husamd): I wish defer is a thing in c/c++

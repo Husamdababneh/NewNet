@@ -151,7 +151,7 @@ PROC_DECLARATION(void,  glGenBuffers, U32, GLBufferId*);
 PROC_DECLARATION(void,  glBufferData, U32, U32, U32*, U32);
 PROC_DECLARATION(void,  glNamedBufferData, GLBufferId, U32, const void*, GLBufferUsage);
 PROC_DECLARATION(void,  glNamedBufferSubData, GLBufferId, U64, U64, const void*);
-
+PROC_DECLARATION(void,  glGetNamedBufferSubData, GLBufferId, U64, U64, void*);
 
 PROC_DECLARATION(void,  glDeleteVertexArrays, U32, const GLVertexArray*);
 PROC_DECLARATION(void,  glDeleteBuffers, U32, const GLVertexArray*);
