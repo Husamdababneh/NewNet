@@ -28,6 +28,7 @@ struct WindowDimentions
     U64 width, height;
 };
 
+global_variable Mat4F32 proj;
 global_variable Win32_OffscreenBuffer offscreenBuffer;
 
 B32 checkShaderProgramStatus(GLShaderProgram program, GLShaderProgramQueryParam param);
@@ -127,6 +128,9 @@ MainWindowCallback(HWND   hWindow,
       case WM_SIZE:
       {
           if (backEnd.context) glViewport(0, 0, LOWORD(lParam), HIWORD(lParam));
+          proj = create_ortho_new(0.0f, LOWORD(lParam),
+                                  HIWORD(lParam), 0.0f,
+                                  -1.0f, 1.0f);
       }break;
       default:
       {
@@ -561,9 +565,9 @@ int  main()
     HDC windowContext = GetDC(window);
     
     //Item obj = init_object();
-    Mat4F32 proj = create_ortho_new(0.0f, dimentions.width,
-                                    dimentions.height, 0.0f,
-                                    -1.0f, 1.0f);
+    proj = create_ortho_new(0.0f, dimentions.width,
+                            dimentions.height, 0.0f,
+                            -1.0f, 1.0f);
     Mat4F32 view =  {
         .m00 = 1.f,
         .m11 = 1.f,
