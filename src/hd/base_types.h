@@ -27,10 +27,49 @@ typedef unsigned __int16  B16;
 typedef unsigned __int32  B32;
 typedef unsigned __int64  B64;
 
-
-
-// Sizes
 typedef size_t Size;
+
+typedef float     F32;
+typedef double    F64;
+
+#elif defined(__clang__) 
+#include <stdint.h>
+typedef   int8_t  S8;
+typedef  int16_t S16;
+typedef  int32_t S32;
+typedef  int64_t S64;
+
+typedef   uint8_t  U8;
+typedef  uint16_t U16;
+typedef  uint32_t U32;
+typedef  uint64_t U64;
+
+typedef   uint8_t B8;
+typedef  uint16_t B16;
+typedef  uint32_t B32;
+typedef  uint64_t B64;
+
+// CLANG ??
+typedef __SIZE_TYPE__ size_t;
+typedef size_t Size;
+
+typedef __PTRDIFF_TYPE__ ptrdiff_t;
+
+
+typedef float     F32;
+typedef double    F64;
+#else
+   #error Define Types for current compiler
+#endif 
+
+
+
+typedef U8  Padding8;
+typedef U16 Padding16;
+typedef U32 Padding32;
+typedef U64 Padding64;
+
+#define NULL 0
 
 #define S8_MIN (-128)
 #define S16_MIN (-32768)
@@ -54,9 +93,11 @@ typedef size_t Size;
 #define TB(x)   (U64)(GB(x) * 1024)
 
 
-// @hmm(husamd): What about long double ?? is it needed
-typedef float     F32;
-typedef double    F64;
+#define _BYTE_ 1
+#define KB(x) (U64)(   x  * 1024)
+#define MB(x) (U64)(KB(x) * 1024)
+#define GB(x) (U64)(MB(x) * 1024)
+#define TB(x) (U64)(GB(x) * 1024)
 
 #define DBL_DECIMAL_DIG  17                      // # of decimal digits of rounding precision
 #define DBL_DIG          15                      // # of decimal digits of precision
@@ -105,19 +146,6 @@ typedef double    F64;
 
 
 
-typedef U8  Padding8;
-typedef U16 Padding16;
-typedef U32 Padding32;
-typedef U64 Padding64;
-
-
-#define _BYTE_ 1
-#define KB(x) (U64)(   x  * 1024)
-#define MB(x) (U64)(KB(x) * 1024)
-#define GB(x) (U64)(MB(x) * 1024)
-#define TB(x) (U64)(GB(x) * 1024)
-
-
 // Move this to 
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
@@ -125,7 +153,11 @@ typedef U64 Padding64;
 
 #define buffer(x, size) char x[KB(size)];
 
-
-#else
-#error Define Types for current compiler
-#endif 
+union _HANDLE {
+	struct {
+#if OS_WINDOWS
+		HANDLE win32_h;
+#endif
+		void* vp;
+	};
+};

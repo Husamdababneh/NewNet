@@ -16,6 +16,7 @@
 inline internal
 void print_string(const String str)
 {
+#if OS_WINDOWS == 1
     //CONSOLE_SCREEN_BUFFER_INFO old;
     //GetConsoleScreenBufferInfo(console, &old);
     //SetConsoleTextAttribute(console, FOREGROUND_RED);
@@ -32,12 +33,14 @@ void print_string(const String str)
     WriteConsole(console, str.str_char, (DWORD)str.length, (LPDWORD)&output_size, NULL);
     // GetLastError if something went wrong
     //SetConsoleTextAttribute(console, old.wAttributes);
+#endif
 }
 
 
 inline internal
 void print_verbos(const String str)
 {
+#if OS_WINDOWS == 1
 #ifdef _HD_VERBOS
     HANDLE console = GetStdHandle(STD_OUTPUT_HANDLE);
     char buffer[1024] = {};
@@ -48,6 +51,7 @@ void print_verbos(const String str)
 #else
     (str);
 #endif // _HD_VERBOS
+#endif // OS_WINDOWS == 1
 }
 
 
@@ -138,8 +142,7 @@ String ConsumeString(StreamingBuffer* buffer, U64 size)
 File open_file(const S8* path)
 {
     File result = {};
-    OVERLAPPED overLapped = {0};
-    
+#if OS_WINDOWS == 1    
     // WIN32_FILE_ATTRIBUTE_DATA fileAttributes;
     HANDLE file = CreateFileA((LPSTR)path,
                               GENERIC_READ,
@@ -161,8 +164,18 @@ File open_file(const S8* path)
     LARGE_INTEGER fileSize;
     GetFileSizeEx(file, &fileSize);
         
-    result.windows_file_handle = file;
+    result.h.windows_file_handle = file;
     result.size = (U64)fileSize.QuadPart;
+#elif OS_LINUX == 1
+	int k_fd = open((const char*)path, O_RDONLY);
+	struct stat s;
+	fstat(k_fd, &s);
+
+	result.h.vp = mmap(0, s.st_size, PROT_READ, MAP_PRIVATE, k_fd, 0);
+	result.size = s.st_size;
+	
+#endif
+	
     return result;
 }
 
@@ -183,13 +196,14 @@ File open_file(String path)
 StreamingBuffer read_entire_file(File file, void* buffer)
 {
     StreamingBuffer result = {};
-#ifdef OS_WINDOWS
+#if  OS_WINDOWS == 1
 
     //U8* bufferCursor = buffer;
     BOOL readSuccess = false;
     //U64 totalByteRead;
     U32 byteRead;
 
+	
     if (file.size <= 0xFFFFFFFF)
     {
         readSuccess = ReadFile(file.handle, buffer, (U32)file.size, (LPDWORD)&byteRead, NULL);
@@ -199,20 +213,14 @@ StreamingBuffer read_entire_file(File file, void* buffer)
     else {
         ExitProcess(1);
     }
-    // TODO(husamd): test this
-    // else
-    //     while(file.size - totalByteRead > 0)
-    //      {
-    //          bytesToRead = file.size - 0xFFFFFFFF;
-    //          readSuccess =  ReadFile(file.handle,
-    //                                  bufferCursor,
-    //                                  bytesToRead,
-    //                                  (LPDWORD)&byteRead,
-    //                                  NULL);
-    //          totalByteRead += byteRead;
-    //          bufferCursor += byteRead;
-    //      }
-    
+#elif OS_LINUX
+	int k_fd = open((const char*)file.h.vp, O_RDONLY);
+	struct stat s;
+	fstat(k_fd, &s);
+
+	result.content = (U8*)mmap(0, s.st_size, PROT_READ, MAP_PRIVATE, k_fd, 0);
+	result.size = s.st_size;
+	
 #endif // OS_WINDOWS
     return result;
 }

@@ -31,15 +31,17 @@ struct StreamingBufferLL {
 
 
 struct Allocator {
-    HANDLE heap;
+    _HANDLE heap;
     U64    requested_address;
     void*  start;
     void*  cursor;
     Size   size;
 };
 
+
+
 struct LinearAllocator {
-    HANDLE heap;
+    _HANDLE heap;
     void*  start;
     void*  current;
     Size   size;

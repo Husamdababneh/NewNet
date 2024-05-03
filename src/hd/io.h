@@ -6,17 +6,15 @@
    $Description: 
     ========================================================================*/
 #pragma once
-#ifdef OS_WINDOWS
+
+#if OS_WINDOWS == 1
 typedef HANDLE FileHandle;
 #endif
 
 
 
 struct File {
-    union {
-        FileHandle windows_file_handle;
-        void* handle;
-    };
+    _HANDLE h;
     U64 size;
     U8* content; 
 };

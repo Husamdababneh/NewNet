@@ -8,13 +8,7 @@
 
 
 
-
-
-#define _STRSAFE_H_INCLUDED_
-#define _INC_STDIO
-
-
-
+#if 0
 #define _CRT_secure_no_warnings 1
 #define WIN32_LEAN_AND_MEAN
 #define NOCOMM
@@ -23,10 +17,14 @@
 #pragma comment(lib,"Kernel32.lib")
 #pragma comment(lib,"User32.lib")
 #pragma comment(lib,"Gdi32.lib")
-// #ifdef debug
 #pragma comment(lib,"Dbghelp.lib")
+#endif
 
 
+#define _STRSAFE_H_INCLUDED_
+#define _INC_STDIO
+
+// This generated errors before the base layer which will confuse the user 
 // @TODO(husamd): replace this with custom implementation
 #define STOP_WARNINGS
 #include "printf.c"

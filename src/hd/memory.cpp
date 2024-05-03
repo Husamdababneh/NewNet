@@ -6,8 +6,6 @@
    $Description: 
     ========================================================================*/
 
-#include "memory.h"
-
 
 #pragma function(memset)
 void* memset(void* dest, int c, size_t count)
@@ -50,13 +48,20 @@ S32 memcmp(const void *str1, const void *str2, size_t n)
     }
     return 0;
 }
-
+#if 0
 internal
 MemoryBlock RequestMemoryBlock(Size size)
 {
+	// TODO: move the allocation to an OS specific impl
     MemoryBlock result;
-#ifdef OS_WINDOWS
+#if OS_WINDOWS == 1
     result.memory =  HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, size);
+    result.size   =  size;
+#elif OS_LINUX == 1
+	constexpr int prot  = PROT_READ | PROT_WRITE;
+    constexpr int flags = MAP_PRIVATE | MAP_ANONYMOUS;
+	
+	result.memory =  mmap(NULL, size, prot, flags, -1, 0);
     result.size   =  size;
 #else
 #error("Not Implemented Yet")
@@ -68,9 +73,12 @@ MemoryBlock RequestMemoryBlock(Size size)
 internal
 B8 FreeMemoryBlock(MemoryBlock result)
 {
-#ifdef OS_WINDOWS
+#if OS_WINDOWS == 1
     if (result.memory)
         HeapFree(GetProcessHeap(), NULL, result.memory);
+#elif OS_LINUX == 1
+	if (result.memory)
+		munmap(result.memory, result.size);
 #else
 #error("Not Implemented Yet")
 #endif
@@ -81,11 +89,8 @@ B8 FreeMemoryBlock(MemoryBlock result)
 void* AllocateSize(LinearAllocator* allocator, Size size)
 {
     U64 availableSize = allocator->size - U64 ((U8*)allocator->current - (U8*)allocator->start);
-    if (availableSize < size)
-    {
-        // Assert here 
-        ExitProcess(1);
-    }
+
+	Assert(availableSize < size);
 
     void* result = allocator->current;
     
@@ -125,7 +130,7 @@ StreamingBuffer* AllocateStreamingChunk(LinearAllocator *allocator)
 {
     return AllocateType(allocator, StreamingBuffer);
 }
-
+#endif
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Copyright (c) 2024 Epic Games Tools
@@ -143,11 +148,11 @@ arena_alloc__sized(U64 init_res, U64 init_cmt)
     void *memory = 0;
     U64 res = 0;
     U64 cmt = 0;
-    B32 large_pages = false;//os_large_pages_enabled();
+    B32 large_pages = os_large_pages_enabled();
     if(large_pages)
     {
         //TODO(husamd): os layer
-        U64 page_size = GetLargePageMinimum();// os_large_page_size(); 
+        U64 page_size = os_large_page_size(); 
         res = AlignPow2(init_res, page_size);
 #if OS_WINDOWS
         cmt = res;
@@ -155,7 +160,10 @@ arena_alloc__sized(U64 init_res, U64 init_cmt)
         cmt = AlignPow2(init_cmt, page_size);
 #endif
         //TODO(husamd): // os_reserve_large(res); os layer
-        memory = VirtualAlloc(0, res, MEM_RESERVE|MEM_COMMIT|MEM_LARGE_PAGES, PAGE_READWRITE);
+
+		// @Cleanup(husamd): Clean this shit
+		// VirtualAlloc(0, res, MEM_RESERVE|MEM_COMMIT|MEM_LARGE_PAGES, PAGE_READWRITE);
+        memory = os_simple_largepage_alloc(res);
         /*
         if(!os_commit_large(memory, cmt))
         {
@@ -166,11 +174,11 @@ arena_alloc__sized(U64 init_res, U64 init_cmt)
     }
     else
     {
-        U64 page_size = GetLargePageMinimum();
+        U64 page_size = os_large_page_size();
         res = AlignPow2(init_res, page_size);
         cmt = AlignPow2(init_cmt, page_size);
         // TODO(husamd): os_reserve(res); os layer
-        memory = VirtualAlloc(0, res, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+        memory = os_simple_alloc(res);
         /*
         if(!os_commit(memory, cmt))
         {
@@ -228,8 +236,8 @@ arena_release(Arena *arena)
 {
     for (Arena *node = arena->current, *prev = 0; node != 0; node = prev) {
         prev = node->prev;
-        VirtualFree(node, 0, MEM_RELEASE);
-        // os_release(node, node->res);
+        // VirtualFree(node, 0, MEM_RELEASE);
+        os_release(node, node->res);
     }
 }
 
@@ -277,22 +285,18 @@ arena_push__impl(Arena *arena, U64 size)
         B32 is_cmt_ok;
 
         // TODO(husamd) : Reenable this 
-        /*
+        
         if (current->large_pages) {
             cmt_new_aligned = AlignPow2(pos_new, ARENA_COMMIT_SIZE_LARGE_PAGES);
             cmt_new_clamped = ClampTop(cmt_new_aligned, current->res);
             cmt_new_size    = cmt_new_clamped - current->cmt;
             is_cmt_ok       = os_commit_large((U8*)current + current->cmt, cmt_new_size);
         } else
-        */ {
+		{
             cmt_new_aligned = AlignPow2(pos_new, ARENA_COMMIT_SIZE);
             cmt_new_clamped = ClampTop(cmt_new_aligned, current->res);
             cmt_new_size    = cmt_new_clamped - current->cmt;
-            //TODO(husamd): os_commit((U8*)current + current->cmt, cmt_new_size);
-            is_cmt_ok       = (VirtualAlloc(current + current->cmt,
-                                            cmt_new_size,
-                                            MEM_COMMIT,
-                                            PAGE_READWRITE) != 0);
+            is_cmt_ok       = os_commit((U8*)current + current->cmt, cmt_new_size);
         }
     
         if (is_cmt_ok) {
@@ -336,9 +340,7 @@ arena_pop_to(Arena *arena, U64 big_pos_unclamped)
     Arena *current = arena->current;
     for (Arena *prev = 0; current->base_pos >= big_pos; current = prev) {
         prev = current->prev;
-        // TODO(husamd): os layer
-        VirtualFree(current, 0, MEM_RELEASE);
-        //os_release(current, current->res);
+        os_release(current, current->res);
     }
 
     // Cleanup(husamd): 
@@ -455,8 +457,7 @@ ensure_commit(void **cmtptr, void *pos, U64 cmt_block_size){
     if (cmt < (U8*)pos){
         U64 cmt_size_raw = (U8*)pos - cmt;
         U64 cmt_size = AlignPow2(cmt_size_raw, cmt_block_size);
-        // TODO(husamd): os layer
-        if (VirtualAlloc(cmt, cmt_size, MEM_COMMIT, PAGE_READWRITE) != 0){//(os_commit(cmt, cmt_size)){
+        if (os_commit(cmt, cmt_size)){
             *cmtptr = cmt + cmt_size;
             result = 1;
         }

@@ -190,7 +190,7 @@ TODO(Husam Dababneh): Architectures
 
 #if OS_WINDOWS
 #define Assert_s(x, FILE, LINE)                                         \
-    {                                                                   \
+	{																	\
         if (!x)                                                         \
         {                                                               \
             MessageBoxA(NULL,                                           \
@@ -201,10 +201,14 @@ TODO(Husam Dababneh): Architectures
             ExitProcess(1);                                             \
         }                                                               \
     }
-#define Assert(x) Assert_s((x), __FILE__, LINE_STRING)
+
 #else
-#error please define Assert Macro
+
+// @CleanUp(husamd): Clean this shit up
+//#error please define Assert_s Macro
+#define Assert_s(x, FILE, LINE)
 #endif
 
-#endif
+#define Assert(x) Assert_s((x), __FILE__, LINE_STRING)
 
+#endif
